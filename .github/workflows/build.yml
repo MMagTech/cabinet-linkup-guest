@@ -1,0 +1,113 @@
+name: Build
+
+# Every pull request and every push to main: the build and its tests on macOS and on Windows, and
+# a read of every tracked file for anything private. Nothing here holds a secret.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Nothing private in a tracked file
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - run: ci/check-no-private.sh
+
+  mac:
+    name: macOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
+      - name: Libraries
+        run: brew install openssl@3 json-c ninja
+      - name: Build
+        run: |
+          cmake --preset default
+          cmake --build --preset default
+      - name: Test
+        run: ctest --preset default
+
+  windows:
+    name: Windows
+    runs-on: windows-2025
+    env:
+      # GStreamer's installer is fetched from its own site and held to this checksum. The program
+      # uses GStreamer's OpenSSL, so that it holds one OpenSSL once the stream is built on it.
+      GST_VERSION: 1.28.8
+      GST_SHA256: e4c41ee6ee9c6c32a45d198463ec08d79bac3bd5fa58adc93d13fe4a08abc9d9
+      VCPKG_ROOT: C:\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
+
+      - name: GStreamer, from the cache
+        id: gst
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: C:\gstreamer
+          key: gstreamer-msvc-x86_64-${{ env.GST_VERSION }}-devel-1
+
+      - name: GStreamer, installed
+        if: steps.gst.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $file = "gstreamer-1.0-msvc-x86_64-$env:GST_VERSION.exe"
+          curl.exe -fsSL --retry 3 -o $file "https://gstreamer.freedesktop.org/data/pkg/windows/$env:GST_VERSION/msvc/$file"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:GST_SHA256) { throw "GStreamer's installer is not the file this was written for: $hash" }
+          $run = Start-Process -FilePath ".\$file" -Wait -PassThru -ArgumentList `
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', '/TYPE=devel', '/DIR=C:\gstreamer', '/LOG=gst-install.log'
+          if ($run.ExitCode -ne 0) {
+            Get-Content gst-install.log -Tail 60
+            throw "GStreamer's installer ended with $($run.ExitCode)"
+          }
+          Remove-Item $file
+
+      - name: Where GStreamer's OpenSSL is
+        shell: pwsh
+        run: |
+          $header = Get-ChildItem C:\gstreamer -Recurse -Filter opensslv.h -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $header) {
+            Get-ChildItem C:\gstreamer -Depth 3 | Select-Object -ExpandProperty FullName
+            throw "GStreamer came without OpenSSL's headers"
+          }
+          $root = $header.Directory.Parent.Parent.FullName
+          "GST_PREFIX=$root" >> $env:GITHUB_ENV
+          "$root\bin" >> $env:GITHUB_PATH
+          "GStreamer is at $root"
+          Get-ChildItem "$root\lib", "$root\bin" -Filter *crypto* | Select-Object -ExpandProperty FullName
+          "{0:N0} MB installed" -f ((Get-ChildItem C:\gstreamer -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
+
+      - name: vcpkg's packages, from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ github.workspace }}\vcpkg-cache
+          key: vcpkg-x64-windows-static-md-${{ hashFiles('vcpkg.json') }}
+
+      - name: Build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          cmake --preset windows "-DOPENSSL_ROOT_DIR=$env:GST_PREFIX"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build --preset windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test
+        shell: pwsh
+        run: ctest --preset windows

@@ -1,0 +1,12 @@
+{
+    "name": "cabinet-linkup-guest",
+    "version-string": "0.0.1",
+    "dependencies": [
+        "json-c",
+        {
+            "name": "curl",
+            "default-features": false,
+            "features": ["schannel"]
+        }
+    ]
+}

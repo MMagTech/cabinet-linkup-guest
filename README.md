@@ -37,6 +37,22 @@ and a server say to each other is
 [PROTOCOL.md](https://github.com/MMagTech/cabinet-linkup/blob/main/PROTOCOL.md)
 in cabinet-linkup.
 
+## Building
+
+On a Mac, with Homebrew:
+
+```bash
+brew install cmake ninja openssl@3 json-c
+git submodule update --init
+cmake --preset default && cmake --build --preset default && ctest --preset default
+```
+
+On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28, whose OpenSSL the app uses.
+[The workflow](.github/workflows/build.yml) is the worked example.
+
+`2pstart-cli` is the app's server side on the command line, for trying a real LinkUp server by hand
+before there is a window: `pair`, `friends`, `online` and `leave`.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
