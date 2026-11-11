@@ -29,6 +29,8 @@ Settings readSettings(const std::string& folder) {
     s.fullScreen = jsonutil::flag(o, "full_screen");
     s.controller = jsonutil::str(o, "controller");
     s.appearOffline = jsonutil::flag(o, "appear_offline");
+    s.startup = jsonutil::flag(o, "startup");
+    s.saidTray = jsonutil::flag(o, "said_tray");
     json_object_put(o);
     return s;
 }
@@ -39,6 +41,8 @@ bool keepSettings(const std::string& folder, const Settings& s) {
     jsonutil::set(o, "full_screen", s.fullScreen);
     jsonutil::set(o, "controller", s.controller);
     jsonutil::set(o, "appear_offline", s.appearOffline);
+    jsonutil::set(o, "startup", s.startup);
+    jsonutil::set(o, "said_tray", s.saidTray);
     const std::string text = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY) + std::string("\n");
     json_object_put(o);
     return cab::writeBytes(fileIn(folder), text, 0600);

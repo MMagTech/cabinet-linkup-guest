@@ -123,6 +123,11 @@ bool Trying::play(float dt, App& app, SDL_Renderer* renderer) {
                 b.button.down = false;
                 app.handle(b);
             }
+        } else if (what == "close") {
+            // Through the loop, as the system sends it, so the tray has it (tray.h).
+            e.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+            e.window.windowID = SDL_GetWindowID(SDL_GetRenderWindow(renderer));
+            SDL_PushEvent(&e);
         } else if (what == "shot") {
             shot_ = rest;
         } else if (what == "quit") {

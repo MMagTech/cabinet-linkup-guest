@@ -332,6 +332,7 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
     colourRow.canRight = colour + 1 < look::kColourCount;
     line(setting::Colour, colourRow);
     line(setting::FullScreen, {"Full screen", v.fullScreen ? "On" : "Off"});
+    line(setting::Startup, {"Startup", v.startup ? "On" : "Off"});
     const int pads = static_cast<int>(v.controllers.size());
     const int pad = std::clamp(v.controller, 0, std::max(0, pads - 1));
     parts::Row controller{"Controller", pads == 0 ? "None connected" : v.controllers[static_cast<size_t>(pad)]};

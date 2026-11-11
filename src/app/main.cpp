@@ -5,6 +5,10 @@
 //   2pstart                     the app, keeping what it holds in the person's own folder (paths.h)
 //   2pstart --folder <path>     the same, kept in that folder instead: for trying it as a second friend
 //   2pstart --try <file>        steps from a file played into it, with pictures saved (trying.h)
+//   2pstart --startup           as at login (startup.h): running, with no window until it is opened
+//
+// One runs for each folder: started again, it brings back the one running (tray.h). Its window's
+// close button hides it, and the app keeps running in the tray or the Dock until it is quit.
 //
 // The loop draws at the screen's rate while something moves, and otherwise sleeps until something
 // happens: a press, a window change, or the server's threads saying they have news.
@@ -19,6 +23,8 @@
 #include <curl/curl.h>
 
 #include "app/app.h"
+#include "app/startup.h"
+#include "app/tray.h"
 #include "app/trying.h"
 #include "guest/paths.h"
 
@@ -58,14 +64,17 @@ int fail(const char* what, const std::string& why) {
 int main(int argc, char* argv[]) {
     std::string folder = guest::dataFolder();
     std::string tryFile;
-    for (int i = 1; i < argc; i += 2) {
+    bool atLogin = false;
+    for (int i = 1; i < argc; ++i) {
         const std::string flag = argv[i];
-        if (i + 1 < argc && flag == "--folder") {
-            folder = argv[i + 1];
+        if (flag == startup::kFlag) {
+            atLogin = true;
+        } else if (i + 1 < argc && flag == "--folder") {
+            folder = argv[++i];
         } else if (i + 1 < argc && flag == "--try") {
-            tryFile = argv[i + 1];
+            tryFile = argv[++i];
         } else {
-            std::fprintf(stderr, "usage: 2pstart [--folder <path>] [--try <file>]\n");
+            std::fprintf(stderr, "usage: 2pstart [--folder <path>] [--try <file>] [--startup]\n");
             return 2;
         }
     }
@@ -76,7 +85,14 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
+    // Already running with this folder: that one comes to the front instead, unless this is the login's.
+    if (!folder.empty() && tray::another(folder, atLogin)) return 0;
+
     SDL_SetAppMetadata("CabinetOS 2P Start", TWOPSTART_VERSION, "io.github.mmagtech.2pstart");
+    // The close button hides the window (tray.h), and a controller is heard with another program in
+    // front, for the idle rule (idle.h).
+    SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     // Steps played in from a file take nothing from whoever is at the computer: the window does not
     // come to the front, and their own presses are not mixed in.
     const bool tryingIt = !tryFile.empty();
@@ -86,8 +102,9 @@ int main(int argc, char* argv[]) {
 
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
-    if (!SDL_CreateWindowAndRenderer("CabinetOS 2P Start", 1280, 720, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY,
-                                     &window, &renderer))
+    const SDL_WindowFlags shown = atLogin ? SDL_WINDOW_HIDDEN : 0;
+    if (!SDL_CreateWindowAndRenderer("CabinetOS 2P Start", 1280, 720,
+                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | shown, &window, &renderer))
         return fail("no window", SDL_GetError());
     SDL_SetWindowMinimumSize(window, 640, 360);
     SDL_SetRenderVSync(renderer, 1);
@@ -97,9 +114,20 @@ int main(int argc, char* argv[]) {
         bool running = true;
         App app(window, renderer, fontsFolder(), folder, wake);
         if (!app.start(why)) return fail("could not start", why);
+        tray::Asks asks;
+        asks.statusLine = [&app]() { return app.statusLine(); };
+        asks.flipStatus = [&app]() { app.flipStatus(); };
+        asks.answer = [&app](const std::string& who) { app.answerFrom(who); };
+        asks.sayStillRunning = [&app]() { return app.sayStillRunning(); };
+        tray::Tray tray(window, folder, std::move(asks));
+        app.tellInvites([&tray](const std::string& who, const std::string& line, const std::string& game) {
+            tray.invited(who, line, game);
+        });
         const auto handle = [&](const SDL_Event& e) {
             if (e.type == SDL_EVENT_QUIT) running = false;
-            else if (!tryingIt || !fromHands(e)) app.handle(e);
+            else if (tray.take(e)) return;
+            else if (tryingIt && fromHands(e)) return;
+            else if (!app.elsewhere(e)) app.handle(e);
         };
 
         Uint64 last = SDL_GetTicksNS();

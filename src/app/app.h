@@ -15,6 +15,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "app/idle.h"
 #include "app/input.h"
 #include "app/notice.h"
 #include "app/textline.h"
@@ -36,6 +37,9 @@ public:
     // False, with why, when the fonts or the folder cannot be had.
     bool start(std::string& why);
     void handle(const SDL_Event& e);
+    // A controller pressed with another program in front: true when `e` is one, which the menus do not
+    // take (idle.h). Before handle.
+    bool elsewhere(const SDL_Event& e);
     void tick(float dt);
     // The frame, not yet shown: the caller presents it.
     void draw();
@@ -43,6 +47,16 @@ public:
     bool busy() const;
     // Signs out, a few seconds at the most.
     void quit();
+
+    // For the tray (tray.h). An invite heard while nobody may be looking goes to `onInvite` too: who,
+    // the console's line for it, and the game.
+    void tellInvites(std::function<void(const std::string&, const std::string&, const std::string&)> onInvite);
+    // Join or Decline for this friend's invite, as pressing their tile opens it. Nothing when it ended.
+    void answerFrom(const std::string& who);
+    std::string statusLine() const;
+    void flipStatus();
+    // True once ever, and kept: the first time the window hides to the tray, it is said.
+    bool sayStillRunning();
 
 private:
     enum class Place { FirstRun, Friends, Settings, Waiting };
@@ -125,6 +139,7 @@ private:
     void sayPairing(pairing::Result r);
     void setHands(parts::Hands hands);
     void setFullScreen(bool on);
+    void setStartup(bool on);
     void keepSettings();
 
     // The controllers.
@@ -173,4 +188,9 @@ private:
 
     std::vector<SDL_JoystickID> padIds_;
     std::map<SDL_JoystickID, SDL_Gamepad*> pads_;
+
+    // Nobody at the computer: Offline to friends, as a console left alone (idle.h).
+    idle::Watch idle_;
+    bool away_ = false;
+    std::function<void(const std::string&, const std::string&, const std::string&)> onInvite_;
 };

@@ -1,6 +1,6 @@
 // What a friend changed in Settings, kept in the app's folder so it is still there next time:
-// the colour, full screen, which controller plays, and Appear Offline. The name is kept on its
-// own beside the key (account.h), because the server knows the friend by it.
+// the colour, full screen, Startup, which controller plays, and Appear Offline. The name is kept
+// on its own beside the key (account.h), because the server knows the friend by it.
 
 #pragma once
 
@@ -13,6 +13,8 @@ struct Settings {
     bool fullScreen = false;
     std::string controller;           // the one that plays, by SDL's GUID; empty for the first there
     bool appearOffline = false;
+    bool startup = false;             // opens at login, with no window (app/startup.h)
+    bool saidTray = false;            // Windows said once that the X keeps it running in the tray
 };
 
 // What is kept, or the defaults for anything missing or unreadable.

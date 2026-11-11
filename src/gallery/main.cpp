@@ -202,6 +202,12 @@ std::vector<Scene> scenes() {
              parts::notice(c, "Connect a controller to play", Tone::Problem);
          }},
         {"25-settings", "Settings", [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, 1); }},
+        {"25a-settings-startup", "Settings, Startup on",
+         [](ui::Canvas& c, float) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Startup);
+             v.startup = true;
+             screens::drawSettings(c, v);
+         }},
         {"26-colour-teal", "Settings, in Teal",
          [](ui::Canvas& c, float) {
              c.setLook(look::of(look::Colour::Teal));
