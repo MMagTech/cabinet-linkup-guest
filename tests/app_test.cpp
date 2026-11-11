@@ -1,6 +1,6 @@
 // The app's parts that need no window and no network: where focus goes, what a controller, the
-// keys and the mouse ask for, what a typed line keeps, the settings file, and the server's list of
-// friends read with each invite's sealed box opened.
+// keys and the mouse ask for, what a typed line keeps, the settings file, the server's list of
+// friends read with each invite's sealed box opened, the idle rule, and Startup's entry.
 //
 //   app-test
 
@@ -11,9 +11,12 @@
 #include <string>
 #include <vector>
 
+#include "app/idle.h"
 #include "app/input.h"
 #include "app/moves.h"
+#include "app/startup.h"
 #include "app/textline.h"
+#include "app/tray_system.h"
 #include "box.h"
 #include "fileio.h"
 #include "guest/link.h"
@@ -245,16 +248,92 @@ void settingsAreKept(const std::string& root) {
     s.fullScreen = true;
     s.controller = "030000005e040000e002000000006800";
     s.appearOffline = true;
+    s.startup = true;
+    s.saidTray = true;
+    check(!none.startup && !none.saidTray, "Startup is off at first, and nothing has been said");
     check(guest::keepSettings(folder, s), "the settings were not written");
     const guest::Settings back = guest::readSettings(folder);
     check(back.colour == "sunset" && back.fullScreen && back.controller == s.controller && back.appearOffline,
           "the settings did not read back as kept");
+    check(back.startup && back.saidTray, "Startup and the tray's notice did not read back as kept");
     cab::writeBytes(folder + "/settings.json", std::string("{ not json"));
     check(guest::readSettings(folder).colour == "purple", "a broken file gives the defaults");
     cab::writeBytes(folder + "/settings.json", std::string("{\"full_screen\": true}"));
     const guest::Settings some = guest::readSettings(folder);
     check(some.fullScreen && some.colour == "purple", "a file with some settings keeps those and defaults the rest");
     std::printf("  the settings are kept\n");
+}
+
+// The console's rule (linkupStatusWord): fifteen minutes with nobody, or the screen off, is away.
+void idleIsTheConsolesRule() {
+    using idle::Seen;
+    constexpr double kLong = idle::kAwaySeconds;
+    {
+        idle::Rule r;
+        check(!r.away(Seen{2.0, false}, 100.0), "a computer touched two seconds ago is not away");
+        check(!r.away(Seen{kLong - 1.0, false}, kLong + 100.0), "fourteen minutes and more is not away yet");
+        check(r.away(Seen{kLong + 1.0, false}, kLong + 101.0), "fifteen minutes with nobody is away");
+        check(!r.away(Seen{0.5, false}, kLong + 102.0), "the next touch is back");
+        check(!r.away(Seen{kLong + 5.0, false}, 1.0), "a controller in the app counts as a touch");
+    }
+    {
+        idle::Rule r;
+        check(!r.away(Seen{1.0, false}, 1.0), "somebody at it");
+        // The keys that lock the screen are the last touch before it goes off.
+        check(r.away(Seen{0.1, true}, 2.0), "a locked screen is away at once");
+        check(r.away(Seen{1.1, true}, 3.0), "and stays away while it is locked");
+        check(r.away(Seen{1.2, false}, 3.1), "unlocked by itself, with no touch, is still away");
+        check(r.away(Seen{1.3, false}, 3.2), "still away until somebody touches something");
+        check(!r.away(Seen{0.2, false}, 3.3), "a touch after it is back");
+    }
+    {
+        idle::Rule r;
+        check(!r.away(Seen{5.0, false}, 5.0), "somebody at it");
+        check(r.away(Seen{6.0, true}, 6.0), "the computer going to sleep is away at once");
+        check(r.away(Seen{0.3, true}, 7.0), "a password typed at the lock screen is a touch, though still locked");
+        check(!r.away(Seen{1.0, false}, 8.0), "so unlocking is back at once");
+    }
+    {
+        idle::Rule r;
+        check(!r.away(Seen{-1.0, false}, 10.0), "where the computer cannot say, the app's own presses count");
+        check(r.away(Seen{-1.0, false}, kLong + 1.0), "and fifteen minutes of none is away");
+    }
+    std::printf("  idle is the console's rule\n");
+}
+
+// Startup's entry starts this program where it is, with --startup, and goes when it is turned off.
+void startupIsTheComputersOwn(const std::string& root) {
+    const std::string program = "/Applications/Tom & Jerry/2pstart";
+    const std::string agent = startup::agent(program);
+    check(agent.find("<string>io.github.mmagtech.2pstart</string>") != std::string::npos, "the agent has its label");
+    check(agent.find("<string>/Applications/Tom &amp; Jerry/2pstart</string>") != std::string::npos,
+          "the agent names the program, escaped");
+    check(agent.find("<string>--startup</string>") != std::string::npos, "the agent starts it with --startup");
+    check(agent.find("<key>RunAtLoad</key>\n\t<true/>") != std::string::npos, "the agent runs at login");
+    check(agent.find("KeepAlive") == std::string::npos, "the agent never starts it again by itself");
+    check(startup::runValue("C:\\Program Files\\2P Start\\2pstart.exe") ==
+              "\"C:\\Program Files\\2P Start\\2pstart.exe\" --startup",
+          "the Run value quotes the path and adds --startup");
+
+    const std::string folder = root + "/LaunchAgents";
+    const std::string file = folder + "/io.github.mmagtech.2pstart.plist";
+    std::string why;
+    check(startup::setAgent(folder, program, true, why), "the agent was not written: " + why);
+    const std::vector<uint8_t> held = cab::readBytes(file);
+    check(std::string(held.begin(), held.end()) == agent, "the agent written is not the agent");
+    check(startup::setAgent(folder, "/elsewhere/2pstart", true, why), "the agent was not moved: " + why);
+    const std::vector<uint8_t> moved = cab::readBytes(file);
+    check(std::string(moved.begin(), moved.end()).find("/elsewhere/2pstart") != std::string::npos,
+          "setting it on again moves it to where the program is");
+    check(startup::setAgent(folder, program, false, why) && !std::filesystem::exists(file), "turned off, the agent goes");
+    check(startup::setAgent(folder, program, false, why), "turning it off twice is no trouble");
+
+    check(tray::folderKey("/Volumes/Friend/CabinetOS 2P Start") ==
+              tray::folderKey("/Volumes/Friend/CabinetOS 2P Start"),
+          "a folder has the same name each time");
+    check(tray::folderKey("/tmp/one") != tray::folderKey("/tmp/two"), "two folders have two names");
+    check(tray::folderKey("").size() == 16, "a folder's name is sixteen letters");
+    std::printf("  Startup is the computer's own\n");
 }
 
 // A friend's console seals an invite for this app, as the console does (Conductor::cmdInvite).
@@ -353,6 +432,8 @@ int main() {
     typedLinesKeepWhatTheyShould();
     theCaretIsWhereTypingGoes();
     settingsAreKept(rootText);
+    idleIsTheConsolesRule();
+    startupIsTheComputersOwn(rootText);
     friendsAndInvitesAreRead();
 
     std::filesystem::remove_all(root, ignored);

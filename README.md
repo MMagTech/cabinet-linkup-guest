@@ -58,6 +58,10 @@ its own; `--folder <path>` keeps it somewhere else instead, to try it as a secon
 Until the game can be shown, Join tells the server and then ends the session at once, so the host
 is never left waiting.
 
+The close button leaves it running, so invites still reach the friend: in the tray on Windows, in
+the Dock on a Mac. Startup, in Settings, opens it at login with no window (`--startup`). Friends see
+it Offline after 15 minutes with nobody at the computer, as they would a console.
+
 `2pstart-gallery` shows every screen with made-up friends, before any of it is wired to a server:
 Left and Right step through them. `2pstart-gallery --shots <folder>` saves a picture of each.
 

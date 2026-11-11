@@ -67,6 +67,7 @@ struct SettingsView {
     float still = 0.0f;        // seconds since the last key, for the caret
     int colour = 0;            // one of look's sixteen
     bool fullScreen = true;
+    bool startup = false;      // the app opens at login, with no window
     std::vector<std::string> controllers;   // the ones connected, by name
     int controller = 0;                     // which of them plays
     // Its address, as the console's row shows it. Pressed, the row opens Change server and Leave.
@@ -76,7 +77,7 @@ struct SettingsView {
 };
 // The rows, in order: what `focus` counts.
 namespace setting {
-enum Row : int { Name, Colour, FullScreen, Controller, Server, About, Count };
+enum Row : int { Name, Colour, FullScreen, Startup, Controller, Server, About, Count };
 }
 void drawSettings(ui::Canvas& c, const SettingsView& v);
 

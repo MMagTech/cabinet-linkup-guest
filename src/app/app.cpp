@@ -3,8 +3,12 @@
 #include "app/app.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 
+#include "app/startup.h"
 #include "guest/account.h"
+#include "guest/paths.h"
 #include "ui/look.h"
 
 namespace {
@@ -31,6 +35,27 @@ std::string trimmed(const std::string& s) {
     return s.substr(first, s.find_last_not_of(' ') - first + 1);
 }
 
+// A person's hands, as the console's idle rule counts them: a press, the mouse moved, or a stick
+// pushed past where it rests.
+bool byHands(const SDL_Event& e) {
+    switch (e.type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_WHEEL:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN: return true;
+        case SDL_EVENT_MOUSE_MOTION: return e.motion.xrel != 0.0f || e.motion.yrel != 0.0f;
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION: return std::abs(static_cast<int>(e.gaxis.value)) > idle::kAxisDeadzone;
+        default: return false;
+    }
+}
+
+// The game an invite names, from the list that came with it.
+std::string gameOf(const std::vector<linkup::Friend>& friends, const std::string& invite) {
+    for (const linkup::Friend& f : friends)
+        if (f.invite == invite) return f.game;
+    return {};
+}
+
 // The friend's own name for the console's "this console": the app.
 std::string instead(guest::Link::Connection c) {
     switch (c) {
@@ -46,7 +71,12 @@ std::string instead(guest::Link::Connection c) {
 }  // namespace
 
 App::App(SDL_Window* window, SDL_Renderer* renderer, const std::string& fonts, std::string folder, Uint32 wake)
-    : window_(window), renderer_(renderer), canvas_(renderer, fonts), folder_(std::move(folder)), wake_(wake) {}
+    : window_(window), renderer_(renderer), canvas_(renderer, fonts), folder_(std::move(folder)), wake_(wake),
+      idle_([wake]() {
+          SDL_Event e{};
+          e.type = wake;
+          SDL_PushEvent(&e);
+      }) {}
 
 App::~App() {
     for (auto& [id, pad] : pads_) SDL_CloseGamepad(pad);
@@ -84,6 +114,8 @@ bool App::start(std::string& why) {
     } else {
         toFirstRun();
     }
+    // The computer's entry follows the row, and this program where it is now.
+    setStartup(settings_.startup);
     padsChanged();
     return true;
 }
@@ -108,6 +140,7 @@ void App::fromServer() {
                 notice_.dot = screens::friendDot(state_.friends, e.name);
                 notice_.life = kInvitedSeconds;
                 notice_.holdUntilPress = true;
+                if (onInvite_) onInvite_(e.name, linkup::invitedYou(e.name), gameOf(state_.friends, e.invite));
                 break;
             case Kind::InviteEnded: tookInviteEnded(e.invite); break;
             case Kind::Joined: tookJoined(e); break;
@@ -222,7 +255,8 @@ void App::tookRetyped(const guest::Link::Event& e) {
     if (e.answers == ServerLink::Place::Another) askCode(e.address);
 }
 
-std::string App::statusWord() const { return settings_.appearOffline ? "offline" : "online"; }
+// linkupStatusWord: Appear Offline, or nobody at the computer.
+std::string App::statusWord() const { return settings_.appearOffline || away_ ? "offline" : "online"; }
 
 // ---- A frame ---------------------------------------------------------------
 
@@ -246,6 +280,15 @@ void App::tick(float dt) {
         if (want) SDL_StartTextInput(window_);
         else SDL_StopTextInput(window_);
     }
+    // linkupFollowStatus: friends hear when nobody is at the computer, and when somebody is again.
+    const bool away = idle_.away();
+    if (away != away_) {
+        away_ = away;
+        link_->setStatus(statusWord());
+    }
+    // Hidden in the tray or the Dock, what moves on screen is seen by nobody: a few frames a second at
+    // most, until something happens. The server and the idle rule still have their turn.
+    if (SDL_GetWindowFlags(window_) & SDL_WINDOW_HIDDEN) SDL_WaitEventTimeout(nullptr, 250);
 }
 
 bool App::busy() const {
@@ -287,6 +330,7 @@ void App::draw() {
             v.still = still_;
             v.colour = colourIndex(settings_.colour);
             v.fullScreen = settings_.fullScreen;
+            v.startup = settings_.startup;
             v.controllers = padNames();
             v.controller = chosenPad();
             v.server = address_;
@@ -339,6 +383,9 @@ void App::draw() {
 // ---- Hands -----------------------------------------------------------------
 
 void App::handle(const SDL_Event& e) {
+    // Anybody's hands keep the status Online: the computer counts the keys and the mouse, the app the
+    // controllers (elsewhere, for those pressed with another program in front).
+    if (byHands(e)) idle_.pressed();
     switch (e.type) {
         case SDL_EVENT_GAMEPAD_ADDED:
         case SDL_EVENT_GAMEPAD_REMOVED:
@@ -350,12 +397,17 @@ void App::handle(const SDL_Event& e) {
         case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
         case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN: {
             const bool on = e.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN;
-            if (settings_.fullScreen != on) {
+            // A hidden window leaves full screen (tray.h), and the row stays as it was.
+            if (settings_.fullScreen != on && !(SDL_GetWindowFlags(window_) & SDL_WINDOW_HIDDEN)) {
                 settings_.fullScreen = on;
                 keepSettings();
             }
             return;
         }
+        case SDL_EVENT_WINDOW_SHOWN:
+            // Back from the tray or the Dock: full screen again, if that is what the row says.
+            if (settings_.fullScreen) SDL_SetWindowFullscreen(window_, true);
+            return;
         case SDL_EVENT_TEXT_INPUT:
             if (typing() && e.text.text) typeText(e.text.text);
             break;
@@ -501,11 +553,7 @@ void App::moveOnFriends(Move m) {
 void App::pressFriend() {
     if (tileCount() == 0) return;
     if (friendFocus_ < 0) {
-        // Status, which is Appear Offline by another name, and kept.
-        settings_.appearOffline = !settings_.appearOffline;
-        state_.appearOffline = settings_.appearOffline;
-        keepSettings();
-        link_->setStatus(statusWord());
+        flipStatus();
         return;
     }
     const linkup::Friend& f = state_.friends[static_cast<size_t>(order_[static_cast<size_t>(friendFocus_)])];
@@ -555,6 +603,7 @@ void App::pressSetting(int row) {
         case setting::Colour:
         case setting::Controller: stepSetting(row, 1); break;
         case setting::FullScreen: setFullScreen(!settings_.fullScreen); break;
+        case setting::Startup: setStartup(!settings_.startup); break;
         case setting::Server: serverPanel(); break;
         case setting::About: aboutPanel(0); break;
         default: break;
@@ -1002,6 +1051,19 @@ void App::setFullScreen(bool on) {
     keepSettings();
 }
 
+// Startup: the computer's own entry, then the row. Only for the person's own folder: a copy tried in
+// another (--folder) leaves the computer's entry alone, and keeps the row in its own folder.
+void App::setStartup(bool on) {
+    std::string why;
+    if (folder_ == guest::dataFolder() && !startup::set(on, why)) {
+        std::fprintf(stderr, "2pstart: Startup: %s\n", why.c_str());
+        return;
+    }
+    if (settings_.startup == on) return;
+    settings_.startup = on;
+    keepSettings();
+}
+
 void App::keepSettings() { guest::keepSettings(folder_, settings_); }
 
 // ---- The controllers ----------------------------------------------------------
@@ -1041,4 +1103,54 @@ int App::chosenPad() const {
         if (settings_.controller == guid) return static_cast<int>(i);
     }
     return 0;
+}
+
+// A controller pressed with another program in front, which SDL hands the app too: counted for the
+// idle rule, and only that, since the menus here are not what it was pressed for.
+bool App::elsewhere(const SDL_Event& e) {
+    const bool pad = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e.type == SDL_EVENT_GAMEPAD_BUTTON_UP ||
+                     e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    if (!pad || (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS)) return false;
+    if (byHands(e)) idle_.pressed();
+    return true;
+}
+
+// ---- For the tray ---------------------------------------------------------------
+
+void App::tellInvites(std::function<void(const std::string&, const std::string&, const std::string&)> onInvite) {
+    onInvite_ = std::move(onInvite);
+}
+
+// From a notification: the list, the friend's tile, and their invite's question, as a press on it.
+void App::answerFrom(const std::string& who) {
+    if (place_ != Place::Friends && place_ != Place::Settings) return;
+    if (typingName_ || overlay_.kind != Overlay::Kind::None) return;
+    const int count = tileCount();
+    for (int i = 0; i < count; ++i) {
+        const linkup::Friend& f = state_.friends[static_cast<size_t>(order_[static_cast<size_t>(i)])];
+        if (f.name != who || f.status != linkup::Status::InvitedYou) continue;
+        switchTo(Place::Friends);
+        barFocused_ = false;
+        friendFocus_ = i;
+        answerInvite(f);
+        return;
+    }
+}
+
+std::string App::statusLine() const { return linkup::statusLine(settings_.appearOffline); }
+
+// The Status line: Appear Offline by another name, and kept.
+void App::flipStatus() {
+    if (!paired_) return;
+    settings_.appearOffline = !settings_.appearOffline;
+    state_.appearOffline = settings_.appearOffline;
+    keepSettings();
+    link_->setStatus(statusWord());
+}
+
+bool App::sayStillRunning() {
+    if (settings_.saidTray) return false;
+    settings_.saidTray = true;
+    keepSettings();
+    return true;
 }

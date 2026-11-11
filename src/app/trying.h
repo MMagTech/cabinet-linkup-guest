@@ -9,6 +9,7 @@
 //   pad a                a controller button pressed and let go: a, b, up, down, left, right, lb, rb
 //   point 960 540        the mouse moved to there on the console's 1920 by 1080 canvas
 //   click 960 540        and clicked; `rightclick` clicks the right button
+//   close                the window's close button: it hides, and the app keeps running
 //   shot first-run.png   a picture of the window as it is
 //   quit
 //
