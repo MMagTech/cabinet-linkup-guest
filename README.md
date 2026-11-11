@@ -20,9 +20,9 @@ and the games. They just press Start.
 
 ## Where it stands
 
-- [ ] The protocol code building and tested on Windows and macOS
+- [x] The protocol code building and tested on Windows and macOS
 - [ ] Pairing with a LinkUp server
-- [ ] The screens, as a gallery
+- [x] The screens, as a gallery
 - [ ] Picture, sound and a controller on macOS
 - [ ] The same on Windows
 - [ ] A Windows package
