@@ -71,18 +71,79 @@ std::vector<std::string> twoLines(ui::Canvas& c, const std::string& s, TextStyle
     return {line, c.truncate(s.substr(brk), st, width)};
 }
 
-// As much of the end of `s` as fits `width`, with an ellipsis before it: what was just typed.
-std::string lastOf(ui::Canvas& c, const std::string& s, TextStyle st, float width) {
-    if (c.measure(s, st) <= width) return s;
-    const std::string ellipsis = "\xE2\x80\xA6";
-    size_t from = 0;
-    while (from < s.size()) {
-        ++from;
-        while (from < s.size() && (static_cast<unsigned char>(s[from]) & 0xC0) == 0x80) ++from;
-        const std::string tail = ellipsis + s.substr(from);
-        if (c.measure(tail, st) <= width) return tail;
+const char* const kEllipsis = "\xE2\x80\xA6";
+
+// A whole letter at a time, never into the middle of one (keyboard.cpp, nextChar).
+size_t nextLetter(const std::string& s, size_t at) {
+    if (at >= s.size()) return s.size();
+    ++at;
+    while (at < s.size() && (static_cast<unsigned char>(s[at]) & 0xC0) == 0x80) ++at;
+    return at;
+}
+
+// `at` on the edge of a letter, back to its start if it is inside one, and no further than the end.
+size_t onEdge(const std::string& s, size_t at) {
+    at = std::min(at, s.size());
+    while (at > 0 && at < s.size() && (static_cast<unsigned char>(s[at]) & 0xC0) == 0x80) --at;
+    return at;
+}
+
+// What of a typed line is drawn: the bytes from `from` to `to`, with an ellipsis for what came off
+// either end.
+struct Shown {
+    std::string words;
+    size_t from = 0, to = 0;
+    bool cutStart = false;
+};
+
+// What of a typed line fits `width`, with the caret at `caret` in view, as the console's keyboard
+// keeps its field (keyboard.cpp): all of it when it fits; otherwise letters come off the start
+// while the caret is past them, so the end shows while somebody types there, and then off the end.
+Shown shownOf(ui::Canvas& c, const std::string& s, size_t caret, TextStyle st, float width) {
+    std::vector<size_t> edges{0};
+    for (size_t i = 0; i < s.size();) {
+        i = nextLetter(s, i);
+        edges.push_back(i);
     }
-    return ellipsis;
+    const size_t n = edges.size() - 1;
+    size_t at = n;   // the caret, counted in letters
+    for (size_t k = 0; k <= n; ++k) {
+        if (edges[k] >= caret) {
+            at = k;
+            break;
+        }
+    }
+    size_t first = 0, last = n;
+    const auto words = [&]() {
+        return std::string(first > 0 ? kEllipsis : "") + s.substr(edges[first], edges[last] - edges[first]) +
+               (last < n ? kEllipsis : "");
+    };
+    std::string w = words();
+    while (last - first > 1 && c.measure(w, st) > width) {
+        if (first < at) ++first;
+        else --last;
+        w = words();
+    }
+    return {w, edges[first], edges[last], first > 0};
+}
+
+// Where, from `x`, the gap before byte `at` of the line was drawn.
+float gapX(ui::Canvas& c, const std::string& s, const Shown& sh, size_t at, float x, TextStyle st) {
+    return x + c.measure(std::string(sh.cutStart ? kEllipsis : "") + s.substr(sh.from, at - sh.from), st);
+}
+
+// Each gap between the letters drawn, kept under the line's spot for a click (Canvas::letters).
+void keepLetters(ui::Canvas& c, int id, float left, float right, const std::string& s, const Shown& sh, float x,
+                 TextStyle st) {
+    ui::Letters l;
+    l.id = id;
+    l.left = left;
+    l.right = right;
+    for (size_t at = sh.from;; at = nextLetter(s, at)) {
+        l.gaps.push_back({gapX(c, s, sh, at, x, st), at});
+        if (at >= sh.to) break;
+    }
+    c.letters(std::move(l));
 }
 
 }  // namespace
@@ -299,17 +360,27 @@ void row(ui::Canvas& c, float x, float y, float w, const Row& r, float focus) {
         c.text(kChevron, right, valueBase, vs, Color::white((r.canRight ? kArrowOn : kArrowOff) * focus));
         right -= kArrowGap;
     }
-    // The caret, where the next letter goes, with room kept for it.
+    // The caret, with room kept for it after the last letter.
     constexpr float kCaretRoom = 9.0f;
     if (r.typing) right -= kCaretRoom;
-    const float room = right - (x + kPad + c.measure(r.label, st) + kPad);
-    // Typing keeps the end of the line in view; anything else keeps its start.
-    const std::string shown = r.typing ? lastOf(c, r.value, vs, room) : c.truncate(r.value, vs, room);
-    const float shownW = c.measure(shown, vs);
-    c.text(shown, right - shownW, valueBase, vs,
-           Color::white(r.dim ? 0.35f : r.typing ? 0.94f : 0.60f + focus * 0.34f));
-    // As on the console, a line with nothing typed shows its placeholder and no caret.
-    if (r.typing && !r.dim) caret(c, right + kCaretRoom * 0.5f, valueBase, vs, r.still);
+    const float valueLeft = x + kPad + c.measure(r.label, st) + kPad;
+    const float room = right - valueLeft;
+    // A line typed into keeps its caret in view, at its start when it is not being typed into.
+    // Anything else keeps its start. As on the console, a line with nothing typed shows its
+    // placeholder and no caret.
+    const bool typed = (r.typing || r.line != 0) && !r.dim;
+    const size_t at = onEdge(r.value, r.typing ? r.caret : 0);
+    Shown sh;
+    if (typed) sh = shownOf(c, r.value, at, vs, room);
+    else sh.words = c.truncate(r.value, vs, room);
+    const float shownW = c.measure(sh.words, vs);
+    const float textX = right - shownW;
+    c.text(sh.words, textX, valueBase, vs, Color::white(r.dim ? 0.35f : r.typing ? 0.94f : 0.60f + focus * 0.34f));
+    if (typed && r.line != 0) keepLetters(c, r.line, valueLeft, x + w, r.value, sh, textX, vs);
+    // After the last letter, a gap after it; inside the line, on the gap between two.
+    if (typed && r.typing)
+        caret(c, at >= r.value.size() ? right + kCaretRoom * 0.5f : gapX(c, r.value, sh, at, textX, vs), valueBase, vs,
+              r.still);
     if (arrows) {
         const float aw = c.measure(kChevronBack, vs);
         c.text(kChevronBack, right - shownW - kArrowGap - aw, valueBase, vs,
@@ -362,11 +433,17 @@ void fieldPanel(ui::Canvas& c, const FieldPanel& p) {
     const TextStyle st = TextStyle::Title3;
     const float base = y + kFieldH * 0.5f + c.ascent(st) * 0.5f;
     const float textX = px + kPad + 20.0f;
-    // White is what was typed, grey everything else. A long line keeps its end in view.
+    // White is what was typed, grey everything else. A long line keeps its caret in view.
     const bool empty = p.value.empty();
-    const std::string shown = empty ? p.placeholder : lastOf(c, p.value, st, fieldW - 56.0f);
-    c.text(shown, textX, base, st, empty ? Color::white(0.35f) : Color::white(1.0f));
-    if (!empty) caret(c, textX + c.measure(shown, st), base, st, p.still);
+    const size_t at = onEdge(p.value, p.caret);
+    Shown sh;
+    if (empty) sh.words = p.placeholder;
+    else sh = shownOf(c, p.value, at, st, fieldW - 56.0f);
+    c.text(sh.words, textX, base, st, empty ? Color::white(0.35f) : Color::white(1.0f));
+    if (!empty) {
+        keepLetters(c, spot::kField, field.x, field.x + field.w, p.value, sh, textX, st);
+        caret(c, gapX(c, p.value, sh, at, textX, st), base, st, p.still);
+    }
     y += kFieldH + kGap;
     pressPrompt(c, p.prompt, W * 0.5f, y + kPromptH * 0.5f + c.ascent(st) * 0.40f, 1.0f);
 }

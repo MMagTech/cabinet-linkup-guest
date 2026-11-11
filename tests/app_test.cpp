@@ -165,27 +165,74 @@ void handsBecomeMoves() {
     std::printf("  a controller, the keys and the mouse become moves\n");
 }
 
+textline::Line at(const std::string& text, size_t caret) { return textline::Line{text, caret}; }
+textline::Line atEnd(const std::string& text) { return textline::Line{text, text.size()}; }
+bool same(const textline::Line& l, const std::string& text, size_t caret) { return l.text == text && l.caret == caret; }
+
 void typedLinesKeepWhatTheyShould() {
     using textline::Kind;
-    check(textline::add("", "k7mr4qxt", Kind::Code) == "K7MR-4QXT", "a code is tidied as it is typed");
-    check(textline::add("K7MR-4QXT", "9hpv", Kind::Code) == "K7MR-4QXT-9HPV", "a code is finished");
-    check(textline::add("", " K7MR-4QXT-9HPV\n", Kind::Code) == "K7MR-4QXT-9HPV", "a pasted code is tidied");
-    check(textline::backspace("K7MR-4", Kind::Code) == "K7MR", "deleting after a dash takes the letter and the dash");
-    check(textline::ready("K7MR-4QXT-9HPV", Kind::Code) && !textline::ready("K7MR-4QXT", Kind::Code),
-          "only a whole code is ready");
+    using namespace textline;
+    check(same(add(at("", 0), "k7mr4qxt", Kind::Code), "K7MR-4QXT", 9), "a code is tidied as it is typed");
+    check(add(atEnd("K7MR-4QXT"), "9hpv", Kind::Code).text == "K7MR-4QXT-9HPV", "a code is finished");
+    check(add(at("", 0), " K7MR-4QXT-9HPV\n", Kind::Code).text == "K7MR-4QXT-9HPV", "a pasted code is tidied");
+    check(same(backspace(atEnd("K7MR-4"), Kind::Code), "K7MR", 4), "deleting after a dash takes the letter and the dash");
+    check(ready("K7MR-4QXT-9HPV", Kind::Code) && !ready("K7MR-4QXT", Kind::Code), "only a whole code is ready");
 
-    check(textline::add("", "  linkup.example.org:7845\r\n", Kind::Address) == "linkup.example.org:7845",
+    check(add(at("", 0), "  linkup.example.org:7845\r\n", Kind::Address).text == "linkup.example.org:7845",
           "a pasted address loses its spaces and line ends");
-    check(textline::add("linkup.example.org", ":7845", Kind::Address) == "linkup.example.org:7845", "an address grows");
-    check(textline::add("", std::string(400, 'a'), Kind::Address).size() == textline::kMaxAddress, "an address has a limit");
+    check(add(atEnd("linkup.example.org"), ":7845", Kind::Address).text == "linkup.example.org:7845", "an address grows");
+    check(add(at("", 0), std::string(400, 'a'), Kind::Address).text.size() == kMaxAddress, "an address has a limit");
 
-    check(textline::add("", "  alex", Kind::Name) == "alex", "a name does not start with spaces");
-    check(textline::add("al", "ex\n", Kind::Name) == "alex", "a line end is not part of a name");
-    check(textline::backspace("Zo\xc3\xab", Kind::Name) == "Zo", "a letter of two bytes goes whole");
-    check(textline::backspace("\xf0\x9f\x8e\xae", Kind::Name).empty(), "a letter of four bytes goes whole");
-    check(textline::add(std::string(127, 'a'), "\xc3\xab", Kind::Name).size() == 127, "a name stops at 128 bytes, whole");
-    check(textline::ready("alex ", Kind::Name) && !textline::ready("   ", Kind::Name), "a name is ready when it has letters");
+    check(add(at("", 0), "  alex", Kind::Name).text == "alex", "a name does not start with spaces");
+    check(add(atEnd("al"), "ex\n", Kind::Name).text == "alex", "a line end is not part of a name");
+    check(same(backspace(atEnd("Zo\xc3\xab"), Kind::Name), "Zo", 2), "a letter of two bytes goes whole");
+    check(backspace(atEnd("\xf0\x9f\x8e\xae"), Kind::Name).text.empty(), "a letter of four bytes goes whole");
+    check(add(atEnd(std::string(127, 'a')), "\xc3\xab", Kind::Name).text.size() == 127, "a name stops at 128 bytes, whole");
+    check(ready("alex ", Kind::Name) && !ready("   ", Kind::Name), "a name is ready when it has letters");
     std::printf("  typed lines keep what they should\n");
+}
+
+void theCaretIsWhereTypingGoes() {
+    using textline::Kind;
+    using namespace textline;
+    check(same(add(at("linkup.exmple.org", 9), "a", Kind::Address), "linkup.example.org", 10),
+          "a letter goes in at the caret, and the caret after it");
+    check(same(add(at("linkup.org", 7), "example.", Kind::Address), "linkup.example.org", 15), "a paste goes in at the caret");
+    check(same(backspace(at("linkup.exaample.org", 10), Kind::Address), "linkup.example.org", 9),
+          "Backspace takes the letter before the caret");
+    check(same(forwardDelete(at("linkup.exaample.org", 9), Kind::Address), "linkup.example.org", 9),
+          "Delete takes the letter after the caret");
+    check(same(backspace(at("alex", 0), Kind::Name), "alex", 0), "Backspace at the start takes nothing");
+    check(same(forwardDelete(atEnd("alex"), Kind::Name), "alex", 4), "Delete at the end takes nothing");
+    check(same(add(at(std::string(kMaxAddress, 'a'), 5), "b", Kind::Address), std::string(kMaxAddress, 'a'), 5),
+          "a full address takes nothing more, and keeps its end");
+
+    // Zoë: the ë is two bytes.
+    const std::string zoe = "Zo\xc3\xab";
+    check(step(at(zoe, 2), 1, Kind::Name).caret == 4, "Right steps over a letter of two bytes whole");
+    check(step(atEnd(zoe), 1, Kind::Name).caret == 4, "Right stops at the end");
+    check(step(atEnd(zoe), -1, Kind::Name).caret == 2, "Left steps back over it whole");
+    check(step(at(zoe, 0), -1, Kind::Name).caret == 0, "Left stops at the start");
+    check(moveTo(at(zoe, 0), 3, Kind::Name).caret == 2, "a caret is never inside a letter");
+    check(moveTo(at(zoe, 0), std::string::npos, Kind::Name).caret == 4, "End is the end");
+    check(same(backspace(at("A Bob", 1), Kind::Name), "Bob", 0), "a name left starting with a space loses it");
+    check(same(add(at("Bob", 0), " ", Kind::Name), "Bob", 0), "a name does not start with a typed space");
+    check(same(add(at(std::string(128, 'a'), 3), "b", Kind::Name), std::string(128, 'a'), 3),
+          "a full name takes nothing more, and keeps its end");
+
+    // A code's caret counts letters: the dashes are the code's.
+    check(same(add(at("K7MR-4QXT", 4), "z", Kind::Code), "K7MR-Z4QX-T", 6),
+          "a letter in a code's middle regroups it, and the caret is after that letter");
+    check(same(add(at("K7MR-4QXT", 4), "ab3cd", Kind::Code), "K7MR-AB3C-4QXT", 9),
+          "a paste in a code's middle takes what fits, and keeps the end");
+    check(same(add(at("K7MR-4QXT-9HPV", 4), "z", Kind::Code), "K7MR-4QXT-9HPV", 4), "a whole code takes no more");
+    check(same(backspace(at("K7MR-4QXT", 4), Kind::Code), "K7M4-QXT", 3), "Backspace in a code regroups it");
+    check(same(backspace(at("K7MR-4QXT", 6), Kind::Code), "K7MR-QXT", 4), "Backspace after a dash takes the letter before it");
+    check(same(forwardDelete(at("K7MR-4QXT", 4), Kind::Code), "K7MR-QXT", 4), "Delete before a dash takes the letter after it");
+    check(step(at("K7MR-4QXT", 4), 1, Kind::Code).caret == 6, "Right steps over a dash and a letter");
+    check(step(at("K7MR-4QXT", 6), -1, Kind::Code).caret == 4, "Left steps back to before the dash");
+    check(moveTo(at("K7MR-4QXT", 0), 5, Kind::Code).caret == 4, "a click just after a dash is before it");
+    std::printf("  the caret is where typing goes\n");
 }
 
 void settingsAreKept(const std::string& root) {
@@ -304,6 +351,7 @@ int main() {
     focusMovesAsOnTheConsole();
     handsBecomeMoves();
     typedLinesKeepWhatTheyShould();
+    theCaretIsWhereTypingGoes();
     settingsAreKept(rootText);
     friendsAndInvitesAreRead();
 

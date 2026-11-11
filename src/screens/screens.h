@@ -48,10 +48,11 @@ void drawWaiting(ui::Canvas& c, const WaitingView& v);
 void drawPictureStandIn(ui::Canvas& c, const std::string& game, float clock);
 
 // First run: the address, the code and a name, then Connect. Whatever is typed goes into the
-// focused line, which shows a caret.
+// focused line, at its caret.
 struct FirstRunView {
     std::string address, code, name;
     int focus = 0;         // 0 to 2 the lines, 3 Connect
+    size_t caret = std::string::npos;   // in the focused line, in bytes; past the end is the end
     bool connecting = false;
     float clock = 0.0f;
     float still = 0.0f;    // seconds since the last key, for the caret
@@ -61,7 +62,8 @@ void drawFirstRun(ui::Canvas& c, const FirstRunView& v);
 // Settings: what a friend can change. The colours are the console's own.
 struct SettingsView {
     std::string name;          // as friends see you
-    bool typingName = false;   // the name is being typed: a caret after it
+    bool typingName = false;   // the name is being typed: a caret in it
+    size_t caret = std::string::npos;   // in bytes; past the end is the end
     float still = 0.0f;        // seconds since the last key, for the caret
     int colour = 0;            // one of look's sixteen
     bool fullScreen = true;

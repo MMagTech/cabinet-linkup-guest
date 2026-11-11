@@ -96,9 +96,17 @@ private:
 
     // Typing.
     bool typing() const;
-    void typeText(const std::string& text);
-    void typeBackspace();
     std::string* typedLine(textline::Kind& kind);
+    // The line being typed, changed by `how`, its caret with it.
+    void edit(const std::function<textline::Line(textline::Line, textline::Kind)>& how);
+    void typeText(const std::string& text);
+    // The keys that edit a line, other than the arrows: false for any other key.
+    bool typeKey(const SDL_KeyboardEvent& key);
+    // A line new to typing: the caret at its end, where typing goes on.
+    void caretToEnd();
+    // A click on a line: the caret where it landed, or, off its letters, at the end of a line new to
+    // typing (`fresh`).
+    void clickCaret(int spot, float x, bool fresh);
 
     // What happens.
     void connect();
@@ -135,6 +143,7 @@ private:
     bool textOn_ = false;
     float clock_ = 0.0f;
     float still_ = 0.0f;      // since the last key, for the caret
+    size_t caret_ = 0;        // in the line being typed, in bytes
 
     Place place_ = Place::FirstRun;
     bool barFocused_ = false;

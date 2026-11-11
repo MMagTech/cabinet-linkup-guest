@@ -229,6 +229,26 @@ std::vector<Scene> scenes() {
              v.clock = v.still = t;
              screens::drawFirstRun(c, v);
          }},
+        // The caret moved back into a line, by the arrow keys or a click, to fix a letter there.
+        {"29a-first-run-caret", "First run, the caret back in the address",
+         [](ui::Canvas& c, float t) {
+             screens::FirstRunView v;
+             v.address = "linkup.exmple.org:7845";
+             v.caret = 9;   // after "linkup.ex"
+             v.focus = 0;
+             v.clock = v.still = t;
+             screens::drawFirstRun(c, v);
+         }},
+        {"29b-first-run-code-caret", "First run, the caret before a dash in the code",
+         [](ui::Canvas& c, float t) {
+             screens::FirstRunView v;
+             v.address = kAddress;
+             v.code = "K7MR-4QXT-9HPV";
+             v.caret = 4;   // after "K7MR"
+             v.focus = 1;
+             v.clock = v.still = t;
+             screens::drawFirstRun(c, v);
+         }},
         {"30-first-run-refused", "First run, the server refused",
          [](ui::Canvas& c, float t) {
              firstRun(c, t, 3, true);
@@ -258,6 +278,15 @@ std::vector<Scene> scenes() {
              screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Name);
              v.name = "alex_on_pc";
              v.typingName = true;
+             v.still = t;
+             screens::drawSettings(c, v);
+         }},
+        {"36a-settings-name-caret", "Settings, the caret inside the name",
+         [](ui::Canvas& c, float t) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Name);
+             v.name = "alex_on_pc";
+             v.typingName = true;
+             v.caret = 4;   // after "alex"
              v.still = t;
              screens::drawSettings(c, v);
          }},
@@ -296,6 +325,18 @@ std::vector<Scene> scenes() {
              parts::FieldPanel p;
              p.title = "Server address";
              p.value = "linkup.example.org:79";
+             p.placeholder = "name.example.net:7845";
+             p.still = t;
+             p.prompt = parts::prompt(parts::Hands::Keyboard, false, "to continue");
+             parts::fieldPanel(c, p);
+         }},
+        {"42a-change-server-long", "Change server: a long address, the caret inside it",
+         [](ui::Canvas& c, float t) {
+             settings(c, look::Colour::Purple, screens::setting::Server);
+             parts::FieldPanel p;
+             p.title = "Server address";
+             p.value = "cabinet-linkup.friday-games-night.riley-and-sam.example.org:7845";
+             p.caret = 8;   // after "cabinet-"
              p.placeholder = "name.example.net:7845";
              p.still = t;
              p.prompt = parts::prompt(parts::Hands::Keyboard, false, "to continue");

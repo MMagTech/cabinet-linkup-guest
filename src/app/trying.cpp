@@ -69,8 +69,17 @@ bool Trying::play(float dt, App& app, SDL_Renderer* renderer) {
         if (what == "wait") {
             waiting_ = std::stof(rest);
         } else if (what == "key") {
+            // A key held with it, after the key's name: `key Left cmd`.
+            const size_t space = rest.rfind(' ');
+            const std::string held = space == std::string::npos ? "" : rest.substr(space + 1);
+            const SDL_Keymod mod = held == "cmd"     ? SDL_KMOD_LGUI
+                                   : held == "ctrl"  ? SDL_KMOD_LCTRL
+                                   : held == "shift" ? SDL_KMOD_LSHIFT
+                                                     : SDL_KMOD_NONE;
+            const std::string name = mod == SDL_KMOD_NONE ? rest : rest.substr(0, space);
             e.type = SDL_EVENT_KEY_DOWN;
-            e.key.key = SDL_GetKeyFromName(rest.c_str());
+            e.key.key = SDL_GetKeyFromName(name.c_str());
+            e.key.mod = mod;
             e.key.down = true;
             app.handle(e);
             e.type = SDL_EVENT_KEY_UP;

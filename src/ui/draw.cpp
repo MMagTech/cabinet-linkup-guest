@@ -224,6 +224,18 @@ TTF_Font* Canvas::font(TextStyle st) {
     return f;
 }
 
+std::optional<size_t> Canvas::caretAt(int id, float x) const {
+    for (auto it = letters_.rbegin(); it != letters_.rend(); ++it) {
+        if (it->id != id) continue;
+        if (x < it->left || x >= it->right || it->gaps.empty()) return std::nullopt;
+        const Letters::Gap* nearest = &it->gaps.front();
+        for (const Letters::Gap& g : it->gaps)
+            if (std::fabs(g.x - x) < std::fabs(nearest->x - x)) nearest = &g;
+        return nearest->at;
+    }
+    return std::nullopt;
+}
+
 float Canvas::measure(const std::string& s, TextStyle st) {
     TTF_Font* f = font(st);
     int w = 0, h = 0;

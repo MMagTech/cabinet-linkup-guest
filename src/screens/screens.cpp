@@ -289,7 +289,9 @@ void drawFirstRun(ui::Canvas& c, const FirstRunView& v) {
         r.value = value.empty() ? hint : value;
         r.dim = value.empty();
         r.typing = on;
+        r.caret = v.caret;
         r.still = v.still;
+        r.line = parts::spot::kItem + i;
         const float y = kTop + static_cast<float>(i) * pitch;
         parts::row(c, kX, y, kW, r, on ? 1.0f : 0.0f);
         c.spot(parts::spot::kItem + i, kX, y, kW, parts::kRowHeight);
@@ -320,6 +322,8 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
     };
     parts::Row name{"Your name", v.name};
     name.typing = v.typingName;
+    name.caret = v.caret;
+    name.line = parts::spot::kItem + setting::Name;
     line(setting::Name, name);
     const int colour = std::clamp(v.colour, 0, look::kColourCount - 1);
     parts::Row colourRow{"Colour", look::colourName(static_cast<look::Colour>(colour))};
