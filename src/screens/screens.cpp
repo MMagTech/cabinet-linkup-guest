@@ -326,7 +326,7 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
     name.line = parts::spot::kItem + setting::Name;
     line(setting::Name, name);
     const int colour = std::clamp(v.colour, 0, look::kColourCount - 1);
-    parts::Row colourRow{"Colour", look::colourName(static_cast<look::Colour>(colour))};
+    parts::Row colourRow{"Color", look::colourName(static_cast<look::Colour>(colour))};
     colourRow.choice = true;
     colourRow.canLeft = colour > 0;
     colourRow.canRight = colour + 1 < look::kColourCount;
