@@ -138,7 +138,7 @@ LRESULT CALLBACK onMessage(HWND window, UINT message, WPARAM w, LPARAM l) {
 HICON appIcon() {
     // The program's own icon once it has one (piece F); until then the system's for any program.
     if (HICON own = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1))) return own;
-    return LoadIconW(nullptr, IDI_APPLICATION);
+    return LoadIconW(nullptr, MAKEINTRESOURCEW(32512));   // IDI_APPLICATION, which is narrow here
 }
 
 }  // namespace
