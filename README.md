@@ -23,6 +23,7 @@ and the games. They just press Start.
 - [x] The protocol code building and tested on Windows and macOS
 - [ ] Pairing with a LinkUp server
 - [x] The screens, as a gallery
+- [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
 - [ ] Picture, sound and a controller on macOS
 - [ ] The same on Windows
 - [ ] A Windows package
@@ -50,6 +51,12 @@ cmake --preset default && cmake --build --preset default && ctest --preset defau
 
 On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28, whose OpenSSL the app uses.
 [The workflow](.github/workflows/build.yml) is the worked example.
+
+`2pstart` is the app. It opens a window, pairs on first run and keeps what it holds in a folder of
+its own; `--folder <path>` keeps it somewhere else instead, to try it as a second friend.
+`--try <file>` plays steps from a file into it and saves pictures: [trying.h](src/app/trying.h) says how.
+Until the game can be shown, Join tells the server and then ends the session at once, so the host
+is never left waiting.
 
 `2pstart-gallery` shows every screen with made-up friends, before any of it is wired to a server:
 Left and Right step through them. `2pstart-gallery --shots <folder>` saves a picture of each.

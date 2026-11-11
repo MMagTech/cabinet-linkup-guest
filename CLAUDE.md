@@ -13,14 +13,15 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 |---|---|
 | `cabinetos/` | CabinetOS at a pinned commit. Its `linkup/` is built as it is written |
 | `CMakeLists.txt`, `cmake/` | The one build, for CI and by hand. `NoiseTestWithoutSound.cmake` leaves the sound queue out of CabinetOS's Noise test until the sound is built here |
-| `src/guest/` | 2P Start's own: who the friend is to a server, and where the app keeps its folder |
+| `src/guest/` | 2P Start's own: who the friend is to a server, where the app keeps its folder and settings, and the friend's side of the server (`link`), with no window |
 | `src/ui/` | What every screen is drawn with: rounded shapes and words on the console's 1920 by 1080 canvas (`draw`), the console's sixteen colours (`look`), and the parts screens share (`parts`). The numbers are the console's |
 | `src/screens/` | Each screen, given what to show. None knows a server, a stream or a controller |
 | `src/gallery/` | `2pstart-gallery`: every screen with made-up friends, in a window or as pictures |
+| `src/app/` | `2pstart`, the app: its window, what each press does, and the three kinds of hands turned into the console's moves |
 | `assets/fonts/` | Noto Sans, the console's font, with its licence |
 | `src/cli/` | `2pstart-cli`, the app's server side on the command line |
 | `src/win/` | What Windows lacks for the console's code to build as written: `fileio.h` the Windows way, and a few POSIX names |
-| `tests/` | `guest-test`, with no network |
+| `tests/` | `guest-test` and `app-test`, with no network and no window |
 | `ci/` | What the workflow runs |
 
 Build and test: `cmake --preset default && cmake --build --preset default && ctest --preset default`.

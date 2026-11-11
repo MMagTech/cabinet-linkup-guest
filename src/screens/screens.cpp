@@ -5,7 +5,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 
+#include "screens/credits.h"
+#include "ui/look.h"
 #include "ui/parts.h"
 
 namespace screens {
@@ -157,13 +160,27 @@ void drawNobody(ui::Canvas& c, const std::string& instead) {
 
 }  // namespace
 
+ui::Color friendDot(const std::vector<linkup::Friend>& friends, const std::string& name) {
+    const std::vector<int> colours = linkup::coloursApart(friends, kFriendColours, 1);
+    for (size_t i = 0; i < friends.size(); ++i)
+        if (friends[i].name == name) return evenColour(kFriendTops[static_cast<size_t>(colours[i])], 0.74f, 0.13f);
+    return ui::palette::kMarqueeAmber;
+}
+
+std::vector<int> tileOrder(const std::vector<linkup::Friend>& friends) {
+    std::vector<int> order;
+    for (const linkup::Group& g : linkup::groups(friends))
+        for (int i : g.friends) order.push_back(i);
+    return order;
+}
+
 void drawBar(ui::Canvas& c, Bar selected, bool focused) {
     parts::topBar(c, {"LinkUp", "Settings"}, static_cast<int>(selected), focused ? 1.0f : 0.0f);
 }
 
 void drawFriends(ui::Canvas& c, const FriendsView& v) {
     c.backdrop();
-    drawBar(c, Bar::LinkUp);
+    drawBar(c, Bar::LinkUp, v.barFocused);
 
     std::vector<Tile> tiles;
     if (v.state.instead.empty()) {
@@ -195,16 +212,20 @@ void drawFriends(ui::Canvas& c, const FriendsView& v) {
     const float pitch = kTileH + kCellGap;
     const float gridTop = parts::kContentTop + parts::pillHeight(c) + kSwitcherGapBelow;
     parts::pill(c, linkup::statusLine(v.state.appearOffline), parts::kInset, parts::kContentTop, true,
-                v.focus < 0 ? 1.0f : 0.0f);
+                v.focus == -1 && !v.barFocused ? 1.0f : 0.0f);
+    const std::string status = linkup::statusLine(v.state.appearOffline);
+    c.spot(parts::spot::kStatus, parts::kInset - 14.0f, parts::kContentTop,
+           c.measure(status, TextStyle::Title3) + 28.0f, parts::pillHeight(c));
 
     const int count = static_cast<int>(tiles.size());
     // The focused one last, so it grows over its neighbours.
     for (int pass = 0; pass < 2; ++pass) {
         for (int i = 0; i < count; ++i) {
-            const bool on = i == v.focus;
+            const bool on = i == v.focus && !v.barFocused;
             if ((pass == 1) != on) continue;
             const float cellX = parts::kInset + static_cast<float>(i % kColumns) * (cellW + kCellGap);
             const float cellY = gridTop + static_cast<float>(i / kColumns) * pitch;
+            c.spot(parts::spot::kItem + i, cellX, cellY, cellW, kTileH);
             const float f = on ? 1.0f : 0.0f;
             const float s = 1.0f + f * (kTileFocusScale - 1.0f);
             const float w = cellW * s, h = kTileH * s;
@@ -225,8 +246,8 @@ void drawWaiting(ui::Canvas& c, const WaitingView& v) {
     }
     parts::waitingDots(c, midX, y, v.clock);
     const float foot = ui::kCanvasHeight - ui::kSafeInset - 130.0f;
-    if (v.resumes) parts::pressPrompt(c, "Press", "A", "to resume", midX, foot - 76.0f, 0.80f);
-    parts::pressPrompt(c, "Press", "B", "to leave", midX, foot, 0.80f);
+    if (v.resumes) parts::pressPrompt(c, parts::prompt(v.hands, false, "to resume"), midX, foot - 76.0f, 0.80f);
+    parts::pressPrompt(c, parts::prompt(v.hands, true, "to leave"), midX, foot, 0.80f);
 }
 
 void drawPictureStandIn(ui::Canvas& c, const std::string& game, float clock) {
@@ -259,42 +280,81 @@ void drawFirstRun(ui::Canvas& c, const FirstRunView& v) {
     c.centred("Join a friend's game on their CabinetOS console", kLeftMid, 784.0f, TextStyle::Callout, Color::white(0.60f));
 
     // On the right, the three things a friend sends, and the one thing to press.
-    constexpr float kX = 1020.0f, kW = 780.0f, kTop = 268.0f;
+    constexpr float kX = 1020.0f, kW = 780.0f, kTop = 290.0f;
     const float pitch = parts::kRowHeight + parts::kRowGap;
     const auto line = [&](int i, const char* label, const std::string& value, const char* hint) {
-        parts::row(c, kX, kTop + static_cast<float>(i) * pitch, kW, label, value.empty() ? hint : value,
-                   v.focus == i && !v.connecting ? 1.0f : 0.0f, value.empty());
+        const bool on = v.focus == i && !v.connecting;
+        parts::Row r;
+        r.label = label;
+        r.value = value.empty() ? hint : value;
+        r.dim = value.empty();
+        r.typing = on;
+        r.still = v.still;
+        const float y = kTop + static_cast<float>(i) * pitch;
+        parts::row(c, kX, y, kW, r, on ? 1.0f : 0.0f);
+        c.spot(parts::spot::kItem + i, kX, y, kW, parts::kRowHeight);
     };
-    line(0, "Server", v.address, "The address your friend gave you");
+    line(0, "Server", v.address, "name.example.net:7845");
     line(1, "Code", v.code, "XXXX-XXXX-XXXX");
     line(2, "Your name", v.name, "What your friend will see");
     const float buttonY = kTop + 3.0f * pitch + 22.0f;
     if (v.connecting) {
-        c.centred("Connecting", kX + kW * 0.5f, buttonY + 50.0f, TextStyle::Title3, Color::white(0.80f));
+        c.centred("Pairing", kX + kW * 0.5f, buttonY + 50.0f, TextStyle::Title3, Color::white(0.80f));
         parts::waitingDots(c, kX + kW * 0.5f, buttonY + 98.0f, v.clock);
     } else {
         parts::button(c, kX, buttonY, kW, "Connect", v.focus == 3 ? 1.0f : 0.0f);
+        c.spot(parts::spot::kItem + 3, kX, buttonY, kW, parts::kRowHeight);
     }
-    c.centred("Your friend sends you all three.", kX + kW * 0.5f, buttonY + parts::kRowHeight + 70.0f, TextStyle::Footnote,
-              Color::white(0.45f));
 }
 
 void drawSettings(ui::Canvas& c, const SettingsView& v) {
     c.backdrop();
-    drawBar(c, Bar::Settings);
+    drawBar(c, Bar::Settings, v.barFocused);
     constexpr float kW = 900.0f;
     const float pitch = parts::kRowHeight + parts::kRowGap;
-    const auto line = [&](int i, const char* label, const std::string& value) {
-        parts::row(c, parts::kInset, parts::kContentTop + static_cast<float>(i) * pitch, kW, label, value,
-                   v.focus == i ? 1.0f : 0.0f);
+    const auto line = [&](int i, parts::Row r) {
+        r.still = v.still;
+        const float y = parts::kContentTop + static_cast<float>(i) * pitch;
+        parts::row(c, parts::kInset, y, kW, r, v.focus == i && !v.barFocused ? 1.0f : 0.0f);
+        c.spot(parts::spot::kItem + i, parts::kInset, y, kW, parts::kRowHeight);
     };
-    line(0, "Your name", v.name);
-    line(1, "Colour", v.colour);
-    line(2, "Full screen", v.fullScreen ? "On" : "Off");
-    line(3, "Controller", v.controller.empty() ? "None connected" : v.controller);
-    line(4, "Server", v.server);
-    line(5, "Leave this server", "");
-    line(6, "Credits and licences", "");
+    parts::Row name{"Your name", v.name};
+    name.typing = v.typingName;
+    line(setting::Name, name);
+    const int colour = std::clamp(v.colour, 0, look::kColourCount - 1);
+    parts::Row colourRow{"Colour", look::colourName(static_cast<look::Colour>(colour))};
+    colourRow.choice = true;
+    colourRow.canLeft = colour > 0;
+    colourRow.canRight = colour + 1 < look::kColourCount;
+    line(setting::Colour, colourRow);
+    line(setting::FullScreen, {"Full screen", v.fullScreen ? "On" : "Off"});
+    const int pads = static_cast<int>(v.controllers.size());
+    const int pad = std::clamp(v.controller, 0, std::max(0, pads - 1));
+    parts::Row controller{"Controller", pads == 0 ? "None connected" : v.controllers[static_cast<size_t>(pad)]};
+    controller.choice = pads > 1;
+    controller.canLeft = pad > 0;
+    controller.canRight = pad + 1 < pads;
+    line(setting::Controller, controller);
+    parts::Row server{"Server", v.server};
+    server.opens = true;
+    line(setting::Server, server);
+    parts::Row credits{"Credits and licenses", ""};
+    credits.opens = true;
+    line(setting::Credits, credits);
+}
+
+int creditCount() { return static_cast<int>(std::size(kCredits)); }
+
+void drawCredits(ui::Canvas& c, const CreditsView& v) {
+    parts::Panel p;
+    p.title = "Credits and licenses";
+    for (const Credit& credit : kCredits) {
+        p.options.push_back(credit.name);
+        p.values.push_back(credit.what);
+    }
+    p.focused = v.focus;
+    p.top = v.top;
+    parts::panel(c, p);
 }
 
 }  // namespace screens

@@ -34,6 +34,7 @@ struct Scene {
 
 const char* kHost = "Riley";
 const char* kGame = "Burnout 3";
+const char* kAddress = "linkup.example.org:7845";
 
 linkup::State listOf(std::vector<linkup::Friend> friends) {
     linkup::State s;
@@ -83,49 +84,56 @@ void firstRun(ui::Canvas& c, float clock, int focus, bool filled, bool connectin
     screens::drawFirstRun(c, v);
 }
 
-void waiting(ui::Canvas& c, float clock, const std::string& title, const std::string& game, bool resumes = false) {
+void waiting(ui::Canvas& c, float clock, const std::string& title, const std::string& game, bool resumes = false,
+             parts::Hands hands = parts::Hands::Controller) {
     screens::WaitingView v;
     v.title = title;
     v.game = game;
     v.resumes = resumes;
+    v.hands = hands;
     v.clock = clock;
     screens::drawWaiting(c, v);
 }
 
+// Every LinkUp question is one width, as on the console (linkup.cpp, linkupPanel).
 parts::Panel question(const std::string& title, const std::string& detail, std::vector<std::string> options, int focused) {
     parts::Panel p;
     p.title = title;
     p.detail = detail;
     p.options = std::move(options);
     p.focused = focused;
+    p.width = parts::kLinkUpPanelWidth;
     return p;
 }
 
-parts::Panel said(const std::string& title, const char* after) {
+parts::Panel said(const std::string& title, const char* after, parts::Hands hands = parts::Hands::Controller,
+                  const std::string& detail = "") {
     parts::Panel p;
     p.title = title;
-    p.promptBefore = "Press";
-    p.promptButton = "A";
-    p.promptAfter = after;
+    p.detail = detail;
+    p.prompt = parts::prompt(hands, false, after);
+    p.width = parts::kLinkUpPanelWidth;
     return p;
 }
 
-void settings(ui::Canvas& c, look::Colour colour, int focus) {
+screens::SettingsView settingsOf(look::Colour colour, int focus) {
     screens::SettingsView v;
     v.name = "alex";
-    v.colour = look::colourName(colour);
-    v.controller = "Xbox Wireless Controller";
-    v.server = "Riley's";
+    v.colour = static_cast<int>(colour);
+    v.controllers = {"Xbox Wireless Controller"};
+    v.server = kAddress;
     v.focus = focus;
-    screens::drawSettings(c, v);
+    return v;
 }
+
+void settings(ui::Canvas& c, look::Colour colour, int focus) { screens::drawSettings(c, settingsOf(colour, focus)); }
 
 std::vector<Scene> scenes() {
     using parts::Tone;
     return {
         {"01-first-run", "First run", [](ui::Canvas& c, float t) { firstRun(c, t, 0, false); }},
         {"02-first-run-filled", "First run, filled in", [](ui::Canvas& c, float t) { firstRun(c, t, 3, true); }},
-        {"03-first-run-connecting", "First run, connecting", [](ui::Canvas& c, float t) { firstRun(c, t, 3, true, true); }},
+        {"03-first-run-connecting", "First run, pairing", [](ui::Canvas& c, float t) { firstRun(c, t, 3, true, true); }},
         {"04-first-run-wrong-code", "First run, a wrong code",
          [](ui::Canvas& c, float t) {
              firstRun(c, t, 1, true);
@@ -209,6 +217,100 @@ std::vector<Scene> scenes() {
              c.setLook(look::of(look::Colour::Sky));
              friends(c, oneFriend(Status::InvitedYou));
              parts::panel(c, question(linkup::joinQuestion(kHost), kGame, {"Join", "Decline"}, 0));
+         }},
+        // The app's own: typing, the hints for each kind of hands, Settings' rows that do
+        // something, and what Join says until the game can be shown.
+        {"29-first-run-typing", "First run, typing the code",
+         [](ui::Canvas& c, float t) {
+             screens::FirstRunView v;
+             v.address = "linkup.example.org:7845";
+             v.code = "K7MR-4Q";
+             v.focus = 1;
+             v.clock = v.still = t;
+             screens::drawFirstRun(c, v);
+         }},
+        {"30-first-run-refused", "First run, the server refused",
+         [](ui::Canvas& c, float t) {
+             firstRun(c, t, 3, true);
+             parts::notice(c, "That server refused", Tone::Problem);
+         }},
+        {"31-waiting-keyboard", "Waiting, after the keyboard was used",
+         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, true, parts::Hands::Keyboard); }},
+        {"32-waiting-mouse", "Waiting, after the mouse was used",
+         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, true, parts::Hands::Mouse); }},
+        {"33-ended-keyboard", "The host ended the session, keyboard",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::panel(c, said(linkup::endedSession(kHost), "to continue", parts::Hands::Keyboard));
+         }},
+        {"34-ended-mouse", "The host ended the session, mouse",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::panel(c, said(linkup::endedSession(kHost), "to continue", parts::Hands::Mouse));
+         }},
+        {"35-cant-play-yet", "Join, before the game can be shown",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::panel(c, said("Not supported yet", "to continue"));
+         }},
+        {"36-settings-name", "Settings, typing a new name",
+         [](ui::Canvas& c, float t) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Name);
+             v.name = "alex_on_pc";
+             v.typingName = true;
+             v.still = t;
+             screens::drawSettings(c, v);
+         }},
+        {"37-settings-controller", "Settings, two controllers",
+         [](ui::Canvas& c, float) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Controller);
+             v.controllers = {"Xbox Wireless Controller", "DualSense Wireless Controller"};
+             screens::drawSettings(c, v);
+         }},
+        {"38-settings-server", "Settings, the server",
+         [](ui::Canvas& c, float) {
+             settings(c, look::Colour::Purple, screens::setting::Server);
+             parts::panel(c, question(kAddress, "", {"Change server", "Leave"}, 0));
+         }},
+        {"39-credits", "Credits and licenses",
+         [](ui::Canvas& c, float) {
+             settings(c, look::Colour::Purple, screens::setting::Credits);
+             screens::drawCredits(c, screens::CreditsView{});
+         }},
+        {"40-credits-end", "Credits and licenses, at the end",
+         [](ui::Canvas& c, float) {
+             settings(c, look::Colour::Purple, screens::setting::Credits);
+             screens::CreditsView v;
+             v.focus = screens::creditCount() - 1;
+             v.top = screens::creditCount() - parts::kPanelRows;
+             screens::drawCredits(c, v);
+         }},
+        {"41-settings-leave", "Settings, leaving the server",
+         [](ui::Canvas& c, float) {
+             settings(c, look::Colour::Purple, screens::setting::Server);
+             parts::panel(c, question(std::string("Leave ") + kAddress + "?", "", {"Leave", "Cancel"}, 1));
+         }},
+        {"42-change-server", "Change server: its address",
+         [](ui::Canvas& c, float t) {
+             settings(c, look::Colour::Purple, screens::setting::Server);
+             parts::FieldPanel p;
+             p.title = "Server address";
+             p.value = "linkup.example.org:79";
+             p.placeholder = "name.example.net:7845";
+             p.still = t;
+             p.prompt = parts::prompt(parts::Hands::Keyboard, false, "to continue");
+             parts::fieldPanel(c, p);
+         }},
+        {"43-change-server-code", "Change server: another server's code",
+         [](ui::Canvas& c, float t) {
+             settings(c, look::Colour::Purple, screens::setting::Server);
+             parts::FieldPanel p;
+             p.title = "Code";
+             p.hint = "linkup.example.org:7945";
+             p.placeholder = "XXXX-XXXX-XXXX";
+             p.still = t;
+             p.prompt = parts::prompt(parts::Hands::Keyboard, false, "to continue");
+             parts::fieldPanel(c, p);
          }},
     };
 }
