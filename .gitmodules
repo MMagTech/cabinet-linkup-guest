@@ -1,0 +1,4 @@
+[submodule "cabinetos"]
+	path = cabinetos
+	url = https://github.com/MMagTech/cabinetos.git
+	shallow = true
