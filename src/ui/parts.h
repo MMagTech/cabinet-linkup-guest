@@ -88,15 +88,21 @@ struct Row {
     // faint at the end it cannot pass.
     bool choice = false;
     bool canLeft = true, canRight = true;
-    // Being typed into: a caret after the value, and the end of what was typed kept in view.
+    // Being typed into: the caret at `caret`, in bytes (past the end is the end), and the part of
+    // the line with the caret in it kept in view.
     bool typing = false;
+    size_t caret = std::string::npos;
     float still = 0.0f;      // seconds since the last key, for the caret's blink
+    // A line that is typed into, whether it is now or not: where its letters fall is kept under
+    // this spot, for a click to put the caret between two (Canvas::letters). 0 for any other row.
+    int line = 0;
 };
 // `focus` is 0 to 1.
 void row(ui::Canvas& c, float x, float y, float w, const Row& r, float focus);
 
-// The console's caret (keyboard.cpp): cyan, on the letters, at `x`, a gap after the last one. It
-// holds still for half a second after a key and then blinks once a second, fading.
+// The console's caret (keyboard.cpp): cyan, on the letters, at `x`, on the gap between two of them
+// and drawn over them, so the letters do not move as it walks through. It holds still for half a
+// second after a key and then blinks once a second, fading.
 void caret(ui::Canvas& c, float x, float baseline, ui::TextStyle st, float still);
 
 // A line to type into, as the console's on-screen keyboard shows one, with no keys under it: a
@@ -105,6 +111,7 @@ struct FieldPanel {
     std::string title;
     std::string hint;          // which server a code is for
     std::string value;
+    size_t caret = std::string::npos;   // in bytes; past the end is the end
     std::string placeholder;
     float still = 0.0f;
     Prompt prompt;

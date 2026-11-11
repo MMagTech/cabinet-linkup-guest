@@ -265,6 +265,7 @@ void App::draw() {
     switch (place_) {
         case Place::FirstRun: {
             screens::FirstRunView v = first_;
+            v.caret = caret_;
             v.clock = clock_;
             v.still = still_;
             screens::drawFirstRun(canvas_, v);
@@ -282,6 +283,7 @@ void App::draw() {
             screens::SettingsView v;
             v.name = typingName_ ? typedName_ : name_;
             v.typingName = typingName_;
+            v.caret = caret_;
             v.still = still_;
             v.colour = colourIndex(settings_.colour);
             v.fullScreen = settings_.fullScreen;
@@ -320,6 +322,7 @@ void App::draw() {
         }
         case Overlay::Kind::Field: {
             parts::FieldPanel f = overlay_.field;
+            f.caret = caret_;
             f.still = still_;
             f.prompt = parts::prompt(hands_, false, "to continue");
             parts::fieldPanel(canvas_, f);
@@ -364,18 +367,7 @@ void App::handle(const SDL_Event& e) {
                 return;
             }
             if (typing()) {
-                const bool shortcut = (e.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
-                if (e.key.key == SDLK_BACKSPACE) {
-                    typeBackspace();
-                    return;
-                }
-                if (shortcut && e.key.key == SDLK_V) {
-                    if (char* clip = SDL_GetClipboardText()) {
-                        typeText(clip);
-                        SDL_free(clip);
-                    }
-                    return;
-                }
+                if (typeKey(e.key)) return;
             }
             break;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
@@ -428,6 +420,13 @@ void App::setHands(parts::Hands hands) {
 // ---- Moving (barKey, LinkUpScreen::key, the Settings list, choice.cpp) ------------------------
 
 void App::move(Move m) {
+    // In a line, Left and Right are its caret, a letter at a time, as in the console's keyboard
+    // field: from the keys and the d-pad alike, and held, at the pace every held direction has.
+    if ((m == Move::Left || m == Move::Right) && typing()) {
+        const int by = m == Move::Right ? 1 : -1;
+        edit([by](textline::Line l, textline::Kind kind) { return textline::step(std::move(l), by, kind); });
+        return;
+    }
     if (overlay_.kind != Overlay::Kind::None) {
         moveOnOverlay(m);
         return;
@@ -550,6 +549,7 @@ void App::pressSetting(int row) {
         case setting::Name:
             typingName_ = true;
             typedName_ = name_;
+            caretToEnd();
             still_ = 0.0f;
             break;
         case setting::Colour:
@@ -585,11 +585,18 @@ void App::moveOnFirstRun(Move m) {
     if (first_.connecting) return;
     const moves::Step s = moves::column(first_.focus, 4, m, false);
     switch (s.then) {
-        case Then::Moved: first_.focus = s.focus; break;
+        case Then::Moved:
+            first_.focus = s.focus;
+            caretToEnd();
+            break;
         // Enter on a line goes to the next, as Tab does; on Connect, it connects.
         case Then::Press:
-            if (first_.focus < 3) first_.focus += 1;
-            else connect();
+            if (first_.focus < 3) {
+                first_.focus += 1;
+                caretToEnd();
+            } else {
+                connect();
+            }
             break;
         default: break;
     }
@@ -665,9 +672,11 @@ bool App::spotAt(float x, float y, ui::Spot& out, bool overlayOnly) const {
 
 // Pointing focuses and a click presses. Over a panel only the panel counts, and a click outside it
 // is Back. First run's lines take focus only from a click, so the pointer resting on one does not
-// move where typing goes.
+// move where typing goes. A click on a line's letters puts its caret there.
 void App::pointAt(float x, float y, bool click) {
     namespace spot = parts::spot;
+    float cx = 0, cy = 0;
+    canvas_.toCanvas(x, y, cx, cy);
     ui::Spot s;
     if (overlay_.kind != Overlay::Kind::None) {
         const bool hit = spotAt(x, y, s, true);
@@ -681,6 +690,7 @@ void App::pointAt(float x, float y, bool click) {
         }
         if (!hit) move(Move::Back);
         else if (option || (overlay_.kind == Overlay::Kind::Credits && s.id == spot::kPanel)) move(Move::Press);
+        else if (overlay_.kind == Overlay::Kind::Field && s.id == spot::kField) clickCaret(s.id, cx, false);
         return;
     }
     if (!spotAt(x, y, s, false)) return;
@@ -691,11 +701,14 @@ void App::pointAt(float x, float y, bool click) {
         return;
     }
     switch (place_) {
-        case Place::FirstRun:
+        case Place::FirstRun: {
             if (!click || first_.connecting || s.id < spot::kItem || s.id > spot::kItem + 3) return;
+            const int was = first_.focus;
             first_.focus = s.id - spot::kItem;
             if (first_.focus == 3) connect();
+            else clickCaret(s.id, cx, first_.focus != was);
             return;
+        }
         case Place::Friends:
             if (s.id == spot::kStatus) friendFocus_ = -1;
             else if (s.id >= spot::kItem && s.id < spot::kOption) friendFocus_ = s.id - spot::kItem;
@@ -707,12 +720,19 @@ void App::pointAt(float x, float y, bool click) {
             if (s.id < spot::kItem || s.id >= spot::kOption) return;
             const int row = s.id - spot::kItem;
             if (typingName_) {
-                if (!click || row == screens::setting::Name) return;
+                if (!click) return;
+                if (row == screens::setting::Name) {
+                    clickCaret(s.id, cx, false);
+                    return;
+                }
                 typingName_ = false;
             }
             settingsFocus_ = row;
             barFocused_ = false;
-            if (click) pressSetting(row);
+            if (!click) return;
+            pressSetting(row);
+            // Pressed into typing: the caret goes where the click was.
+            if (typingName_) clickCaret(s.id, cx, false);
             return;
         }
         case Place::Waiting: return;
@@ -748,20 +768,64 @@ std::string* App::typedLine(textline::Kind& kind) {
     return nullptr;
 }
 
-void App::typeText(const std::string& text) {
+// A key or a move holds the caret still, as on the console: it blinks only while it waits.
+void App::edit(const std::function<textline::Line(textline::Line, textline::Kind)>& how) {
     textline::Kind kind;
-    if (std::string* line = typedLine(kind)) {
-        *line = textline::add(*line, text, kind);
-        still_ = 0.0f;
+    std::string* line = typedLine(kind);
+    if (!line) return;
+    textline::Line now = how(textline::Line{*line, caret_}, kind);
+    *line = std::move(now.text);
+    caret_ = now.caret;
+    still_ = 0.0f;
+}
+
+void App::typeText(const std::string& text) {
+    edit([&text](textline::Line l, textline::Kind kind) { return textline::add(std::move(l), text, kind); });
+}
+
+// Left and Right are moves (move), so a held one repeats as every held direction does. These keys
+// repeat as the computer repeats them.
+bool App::typeKey(const SDL_KeyboardEvent& key) {
+    using textline::Kind;
+    using textline::Line;
+    const auto to = [this](size_t at) {
+        edit([at](Line l, Kind kind) { return textline::moveTo(std::move(l), at, kind); });
+    };
+    switch (key.key) {
+        case SDLK_BACKSPACE: edit([](Line l, Kind kind) { return textline::backspace(std::move(l), kind); }); return true;
+        case SDLK_DELETE: edit([](Line l, Kind kind) { return textline::forwardDelete(std::move(l), kind); }); return true;
+        case SDLK_HOME: to(0); return true;
+        case SDLK_END: to(std::string::npos); return true;
+#if defined(SDL_PLATFORM_MACOS)
+        // A Mac's Home and End.
+        case SDLK_LEFT:
+        case SDLK_RIGHT:
+            if (!(key.mod & SDL_KMOD_GUI)) return false;
+            to(key.key == SDLK_LEFT ? 0 : std::string::npos);
+            return true;
+#endif
+        case SDLK_V:
+            if (!(key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) return false;
+            if (char* clip = SDL_GetClipboardText()) {
+                typeText(clip);
+                SDL_free(clip);
+            }
+            return true;
+        default: return false;
     }
 }
 
-void App::typeBackspace() {
+void App::caretToEnd() {
     textline::Kind kind;
-    if (std::string* line = typedLine(kind)) {
-        *line = textline::backspace(*line, kind);
-        still_ = 0.0f;
-    }
+    const std::string* line = typedLine(kind);
+    caret_ = line ? line->size() : 0;
+}
+
+void App::clickCaret(int spot, float x, bool fresh) {
+    if (const std::optional<size_t> at = canvas_.caretAt(spot, x))
+        edit([at](textline::Line l, textline::Kind kind) { return textline::moveTo(std::move(l), *at, kind); });
+    else if (fresh)
+        caretToEnd();
 }
 
 // ---- What happens ------------------------------------------------------------
@@ -771,15 +835,18 @@ void App::connect() {
     const std::string name = trimmed(first_.name);
     if (!textline::ready(first_.address, textline::Kind::Address)) {
         first_.focus = 0;
+        caretToEnd();
         return;
     }
     if (!textline::ready(first_.code, textline::Kind::Code)) {
         first_.focus = 1;
+        caretToEnd();
         notice_.say(kCodeLength, Tone::Problem);
         return;
     }
     if (!textline::ready(name, textline::Kind::Name)) {
         first_.focus = 2;
+        caretToEnd();
         return;
     }
     notice_.clear();
@@ -857,6 +924,7 @@ void App::askAddress() {
     overlay_.typed = [this](const std::string& address) {
         if (address != address_) link_->retype(address);
     };
+    caretToEnd();
     still_ = 0.0f;
 }
 
@@ -873,6 +941,7 @@ void App::askCode(const std::string& address) {
         notice_.say("Pairing\xE2\x80\xA6", Tone::Busy);
         link_->pair(address, code, name_);
     };
+    caretToEnd();
     still_ = 0.0f;
 }
 
@@ -903,6 +972,7 @@ void App::toFirstRun() {
     first_ = screens::FirstRunView{};
     // The name stays: it is the friend's own, whichever server.
     first_.name = name_;
+    caretToEnd();
     settingsFocus_ = 0;
 }
 

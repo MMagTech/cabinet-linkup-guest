@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -77,6 +78,19 @@ struct Spot {
     bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
 
+// Where the letters of a line being typed into were drawn, so a click can put the caret between
+// two: the spot the line is in, how far across a click counts as on its letters, and each gap
+// between two letters with where it is in the line, in bytes.
+struct Letters {
+    struct Gap {
+        float x = 0;
+        size_t at = 0;
+    };
+    int id = 0;
+    float left = 0, right = 0;
+    std::vector<Gap> gaps;
+};
+
 // The console's type sizes, in canvas points (text.cpp).
 enum class TextStyle { LargeTitle, Title2, Title3, Callout, Body, Footnote, Caption1 };
 
@@ -110,7 +124,15 @@ public:
     // last is on top. Cleared at the start of each frame.
     void spot(int id, float x, float y, float w, float h) { spots_.push_back({id, x, y, w, h}); }
     const std::vector<Spot>& spots() const { return spots_; }
-    void clearSpots() { spots_.clear(); }
+    void clearSpots() {
+        spots_.clear();
+        letters_.clear();
+    }
+    // A line's letters, recorded as it is drawn, and cleared with the spots.
+    void letters(Letters l) { letters_.push_back(std::move(l)); }
+    // Where a click at `x` on spot `id` puts the caret: the nearest gap, in bytes. Nothing when the
+    // spot is not a line being typed into, or `x` is not on its letters.
+    std::optional<size_t> caretAt(int id, float x) const;
 
     void setLook(const Look& look) { look_ = look; }
     Color surface() const { return look_.surface; }
@@ -146,6 +168,7 @@ private:
     float alpha_ = 1.0f;
     Look look_;
     std::vector<Spot> spots_;
+    std::vector<Letters> letters_;
     std::map<std::pair<int, int>, TTF_Font*> opened_;     // by weight and pixel size
     std::map<std::string, Written> texts_;
 };
