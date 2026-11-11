@@ -55,6 +55,9 @@ endif()
 find_package(CURL REQUIRED)
 find_package(json-c CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+# The window, the controllers and the words on every screen.
+find_package(SDL3 CONFIG REQUIRED)
+find_package(SDL3_ttf CONFIG REQUIRED)
 
 if(MSVC)
     add_compile_options(/W3 /utf-8)
@@ -67,6 +70,7 @@ endif()
 set(BORROWED "${CMAKE_BINARY_DIR}/borrowed")
 configure_file("${FRONTEND}/fileio.h" "${BORROWED}/fileio.h" COPYONLY)
 configure_file("${FRONTEND}/linkup_wire.h" "${BORROWED}/linkup_wire.h" COPYONLY)
+configure_file("${FRONTEND}/linkuprules.h" "${BORROWED}/linkuprules.h" COPYONLY)
 
 # What a console says to a LinkUp server: Noise, pairing, sessions, sealed boxes, and what it keeps.
 add_library(linkup_protocol STATIC
@@ -108,6 +112,24 @@ if(NOT WIN32)
     target_link_libraries(linkup-probe PRIVATE linkup_protocol)
 endif()
 
+# The screens: how to draw (src/ui), what each shows (src/screens), and LinkUp's rules and words,
+# which are the console's own file, so the app says what the console says.
+add_library(screens STATIC
+    src/ui/draw.cpp
+    src/ui/look.cpp
+    src/ui/parts.cpp
+    src/screens/screens.cpp
+    "${FRONTEND}/linkuprules.cpp")
+target_include_directories(screens PUBLIC src "${BORROWED}")
+target_link_libraries(screens PUBLIC SDL3::SDL3
+    $<IF:$<TARGET_EXISTS:SDL3_ttf::SDL3_ttf>,SDL3_ttf::SDL3_ttf,SDL3_ttf::SDL3_ttf-static>)
+
+# Every screen with made-up friends, in a window or as pictures. The fonts go beside it.
+add_executable(2pstart-gallery src/gallery/main.cpp)
+target_link_libraries(2pstart-gallery PRIVATE screens)
+add_custom_command(TARGET 2pstart-gallery POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:2pstart-gallery>/assets")
+
 enable_testing()
 
 # CabinetOS's Noise test, against the published vectors and the server's own answers, which sit
@@ -121,3 +143,6 @@ add_test(NAME noise-test COMMAND noise-test "${LINKUP}")
 add_executable(guest-test tests/guest_test.cpp)
 target_link_libraries(guest-test PRIVATE guest)
 add_test(NAME guest-test COMMAND guest-test)
+
+# Every screen drawn once into memory and saved: a screen that cannot be drawn fails here.
+add_test(NAME gallery-shots COMMAND 2pstart-gallery --shots "${CMAKE_BINARY_DIR}/shots")
