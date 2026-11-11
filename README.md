@@ -21,7 +21,7 @@ and the games. They just press Start.
 ## Where it stands
 
 - [x] The protocol code building and tested on Windows and macOS
-- [ ] Pairing with a LinkUp server
+- [x] Pairing with a LinkUp server
 - [x] The screens, as a gallery
 - [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
 - [ ] Picture, sound and a controller on macOS
