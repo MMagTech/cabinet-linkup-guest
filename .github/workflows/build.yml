@@ -20,6 +20,7 @@ jobs:
   checks:
     name: Nothing private in a tracked file
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - run: ci/check-no-private.sh
@@ -27,6 +28,7 @@ jobs:
   mac:
     name: macOS
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -43,6 +45,7 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2025
+    timeout-minutes: 45
     env:
       # GStreamer's installer is fetched from its own site and held to this checksum. The program
       # uses GStreamer's OpenSSL, so that it holds one OpenSSL once the stream is built on it.
@@ -57,7 +60,7 @@ jobs:
 
       - name: GStreamer, from the cache
         id: gst
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: C:\gstreamer
           key: gstreamer-msvc-x86_64-${{ env.GST_VERSION }}-devel-1
@@ -78,6 +81,14 @@ jobs:
           }
           Remove-Item $file
 
+      # Kept as soon as it is installed, so a build that fails later does not fetch it again.
+      - name: GStreamer, into the cache
+        if: steps.gst.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: C:\gstreamer
+          key: gstreamer-msvc-x86_64-${{ env.GST_VERSION }}-devel-1
+
       - name: Where GStreamer's OpenSSL is
         shell: pwsh
         run: |
@@ -91,7 +102,8 @@ jobs:
           "$root\bin" >> $env:GITHUB_PATH
           "GStreamer is at $root"
           Get-ChildItem "$root\lib", "$root\bin" -Filter *crypto* | Select-Object -ExpandProperty FullName
-          "{0:N0} MB installed" -f ((Get-ChildItem C:\gstreamer -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
+          "Visual Studio here:"
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -prerelease -format value -property displayName
 
       - name: vcpkg's packages, from the cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
@@ -103,7 +115,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          cmake --preset windows "-DOPENSSL_ROOT_DIR=$env:GST_PREFIX"
+          cmake --preset windows "-DGSTREAMER_ROOT=$env:GST_PREFIX"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build --preset windows
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

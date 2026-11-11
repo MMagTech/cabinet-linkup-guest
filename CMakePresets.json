@@ -12,8 +12,6 @@
         {
             "name": "windows",
             "displayName": "Windows, with vcpkg and GStreamer's OpenSSL",
-            "generator": "Visual Studio 17 2022",
-            "architecture": "x64",
             "binaryDir": "${sourceDir}/build",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": { "VCPKG_TARGET_TRIPLET": "x64-windows-static-md" }

@@ -4,9 +4,12 @@
     "dependencies": [
         "json-c",
         {
+            "$comment": "ssl is Windows' own TLS, Schannel, so the app carries no second TLS library.",
             "name": "curl",
             "default-features": false,
-            "features": ["schannel"]
+            "features": [
+                "ssl"
+            ]
         }
     ]
 }

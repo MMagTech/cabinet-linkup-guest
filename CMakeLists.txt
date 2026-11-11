@@ -18,17 +18,40 @@ if(NOT EXISTS "${LINKUP}/noise.cpp")
     message(FATAL_ERROR "cabinetos/ is empty. Run: git submodule update --init")
 endif()
 
-# OpenSSL 3.2 or later: Argon2id, the slow hash of a code, came in with 3.2. On a Mac it is
-# Homebrew's, which CMake does not find by itself. On Windows it is GStreamer's own, so that the
-# program holds one OpenSSL: OPENSSL_ROOT_DIR is given on the command line.
-if(APPLE AND NOT OPENSSL_ROOT_DIR)
-    execute_process(COMMAND brew --prefix openssl@3
-                    OUTPUT_VARIABLE brew_openssl OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    if(brew_openssl)
-        set(OPENSSL_ROOT_DIR "${brew_openssl}")
+# OpenSSL 3.2 or later: Argon2id, the slow hash of a code, came in with 3.2.
+#
+# On Windows it is GStreamer's own, so that the program holds one OpenSSL once the stream is built
+# on it: -DGSTREAMER_ROOT=<where GStreamer is installed>. GStreamer names its import library
+# lib/crypto.lib, which CMake's own search does not expect, so the target is made here.
+# On a Mac it is Homebrew's, which CMake does not find by itself.
+set(GSTREAMER_ROOT "" CACHE PATH "Where GStreamer is installed (Windows)")
+if(WIN32 AND GSTREAMER_ROOT)
+    file(TO_CMAKE_PATH "${GSTREAMER_ROOT}" gst)
+    if(NOT EXISTS "${gst}/lib/crypto.lib" OR NOT EXISTS "${gst}/include/openssl/opensslv.h")
+        message(FATAL_ERROR "No OpenSSL in GStreamer at ${gst}: lib/crypto.lib and include/openssl are wanted.")
     endif()
+    file(STRINGS "${gst}/include/openssl/opensslv.h" openssl_version
+         REGEX "^#[ \t]*define[ \t]+OPENSSL_VERSION_(MAJOR|MINOR)[ \t]+[0-9]+")
+    string(REGEX REPLACE ".*OPENSSL_VERSION_MAJOR[ \t]+([0-9]+).*" "\\1" openssl_major "${openssl_version}")
+    string(REGEX REPLACE ".*OPENSSL_VERSION_MINOR[ \t]+([0-9]+).*" "\\1" openssl_minor "${openssl_version}")
+    message(STATUS "GStreamer's OpenSSL: ${openssl_major}.${openssl_minor}")
+    if("${openssl_major}.${openssl_minor}" VERSION_LESS 3.2)
+        message(FATAL_ERROR "GStreamer's OpenSSL is ${openssl_major}.${openssl_minor}. Argon2id needs 3.2 or later.")
+    endif()
+    add_library(OpenSSL::Crypto UNKNOWN IMPORTED)
+    set_target_properties(OpenSSL::Crypto PROPERTIES
+        IMPORTED_LOCATION "${gst}/lib/crypto.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${gst}/include")
+else()
+    if(APPLE AND NOT OPENSSL_ROOT_DIR)
+        execute_process(COMMAND brew --prefix openssl@3
+                        OUTPUT_VARIABLE brew_openssl OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(brew_openssl)
+            set(OPENSSL_ROOT_DIR "${brew_openssl}")
+        endif()
+    endif()
+    find_package(OpenSSL 3.2 REQUIRED COMPONENTS Crypto)
 endif()
-find_package(OpenSSL 3.2 REQUIRED COMPONENTS Crypto)
 find_package(CURL REQUIRED)
 find_package(json-c CONFIG REQUIRED)
 find_package(Threads REQUIRED)
