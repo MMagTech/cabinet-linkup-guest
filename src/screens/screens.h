@@ -74,9 +74,18 @@ struct SettingsView {
 };
 // The rows, in order: what `focus` counts.
 namespace setting {
-enum Row : int { Name, Colour, FullScreen, Controller, Server, Credits, Count };
+enum Row : int { Name, Colour, FullScreen, Controller, Server, About, Count };
 }
 void drawSettings(ui::Canvas& c, const SettingsView& v);
+
+// About, as the console's Settings has it: the version, and Credits and licenses. A list over
+// Settings; `focus` is a line.
+struct AboutView {
+    std::string version;
+    int focus = 0;
+};
+parts::Panel aboutPanel(const AboutView& v);
+void drawAbout(ui::Canvas& c, const AboutView& v);
 
 // Credits and licenses: a list over Settings, one line for each project whose work is in the app,
 // what it does and its licence (credits.h). `focus` is a line, `top` the first shown.

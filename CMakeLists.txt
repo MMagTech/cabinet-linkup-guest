@@ -124,6 +124,8 @@ add_library(screens STATIC
     src/screens/screens.cpp
     "${FRONTEND}/linkuprules.cpp")
 target_include_directories(screens PUBLIC src "${BORROWED}")
+# The app's version, for About and the window: the project's, above.
+target_compile_definitions(screens PUBLIC TWOPSTART_VERSION="${PROJECT_VERSION}")
 target_link_libraries(screens PUBLIC SDL3::SDL3
     $<IF:$<TARGET_EXISTS:SDL3_ttf::SDL3_ttf>,SDL3_ttf::SDL3_ttf,SDL3_ttf::SDL3_ttf-static>)
 

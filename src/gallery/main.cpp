@@ -274,16 +274,23 @@ std::vector<Scene> scenes() {
          }},
         {"39-credits", "Credits and licenses",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::Credits);
+             settings(c, look::Colour::Purple, screens::setting::About);
              screens::drawCredits(c, screens::CreditsView{});
          }},
         {"40-credits-end", "Credits and licenses, at the end",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::Credits);
+             settings(c, look::Colour::Purple, screens::setting::About);
              screens::CreditsView v;
              v.focus = screens::creditCount() - 1;
              v.top = screens::creditCount() - parts::kPanelRows;
              screens::drawCredits(c, v);
+         }},
+        {"44-about", "About",
+         [](ui::Canvas& c, float) {
+             settings(c, look::Colour::Purple, screens::setting::About);
+             screens::AboutView v;
+             v.version = TWOPSTART_VERSION;
+             screens::drawAbout(c, v);
          }},
         {"41-settings-leave", "Settings, leaving the server",
          [](ui::Canvas& c, float) {
