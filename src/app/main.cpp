@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
-    SDL_SetAppMetadata("CabinetOS 2P Start", "0.0.1", "io.github.mmagtech.2pstart");
+    SDL_SetAppMetadata("CabinetOS 2P Start", TWOPSTART_VERSION, "io.github.mmagtech.2pstart");
     // Steps played in from a file take nothing from whoever is at the computer: the window does not
     // come to the front, and their own presses are not mixed in.
     const bool tryingIt = !tryFile.empty();

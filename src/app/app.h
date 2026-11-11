@@ -106,6 +106,7 @@ private:
     void join(const linkup::Friend& f);
     void decline(const linkup::Friend& f);
     void serverPanel();
+    void aboutPanel(int focus);
     void askAddress();
     void askCode(const std::string& address);
     void leave();

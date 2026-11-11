@@ -556,11 +556,7 @@ void App::pressSetting(int row) {
         case setting::Controller: stepSetting(row, 1); break;
         case setting::FullScreen: setFullScreen(!settings_.fullScreen); break;
         case setting::Server: serverPanel(); break;
-        case setting::Credits: {
-            overlay_ = Overlay{};
-            overlay_.kind = Overlay::Kind::Credits;
-            break;
-        }
+        case setting::About: aboutPanel(0); break;
         default: break;
     }
 }
@@ -832,6 +828,21 @@ void App::serverPanel() {
     openPanel(p, [this](int answer) {
         if (answer == 0) askAddress();
         if (answer == 1) leave();
+    });
+}
+
+// About, as the console's Settings has it. Version is only read; Credits and licenses opens the list.
+void App::aboutPanel(int focus) {
+    screens::AboutView v;
+    v.version = TWOPSTART_VERSION;
+    v.focus = focus;
+    openPanel(screens::aboutPanel(v), [this](int answer) {
+        if (answer == 0) {
+            aboutPanel(0);
+        } else if (answer == 1) {
+            overlay_ = Overlay{};
+            overlay_.kind = Overlay::Kind::Credits;
+        }
     });
 }
 

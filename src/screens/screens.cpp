@@ -296,7 +296,7 @@ void drawFirstRun(ui::Canvas& c, const FirstRunView& v) {
     };
     line(0, "Server", v.address, "name.example.net:7845");
     line(1, "Code", v.code, "XXXX-XXXX-XXXX");
-    line(2, "Your name", v.name, "What your friend will see");
+    line(2, "Username", v.name, "What your friend will see");
     const float buttonY = kTop + 3.0f * pitch + 22.0f;
     if (v.connecting) {
         c.centred("Pairing", kX + kW * 0.5f, buttonY + 50.0f, TextStyle::Title3, Color::white(0.80f));
@@ -318,7 +318,7 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
         parts::row(c, parts::kInset, y, kW, r, v.focus == i && !v.barFocused ? 1.0f : 0.0f);
         c.spot(parts::spot::kItem + i, parts::kInset, y, kW, parts::kRowHeight);
     };
-    parts::Row name{"Your name", v.name};
+    parts::Row name{"Username", v.name};
     name.typing = v.typingName;
     line(setting::Name, name);
     const int colour = std::clamp(v.colour, 0, look::kColourCount - 1);
@@ -338,10 +338,21 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
     parts::Row server{"Server", v.server};
     server.opens = true;
     line(setting::Server, server);
-    parts::Row credits{"Credits and licenses", ""};
-    credits.opens = true;
-    line(setting::Credits, credits);
+    parts::Row about{"About", ""};
+    about.opens = true;
+    line(setting::About, about);
 }
+
+parts::Panel aboutPanel(const AboutView& v) {
+    parts::Panel p;
+    p.title = "About";
+    p.options = {"Version", "Credits and licenses"};
+    p.values = {v.version, ""};
+    p.focused = v.focus;
+    return p;
+}
+
+void drawAbout(ui::Canvas& c, const AboutView& v) { parts::panel(c, aboutPanel(v)); }
 
 int creditCount() { return static_cast<int>(std::size(kCredits)); }
 
