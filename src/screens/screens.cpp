@@ -246,7 +246,6 @@ void drawWaiting(ui::Canvas& c, const WaitingView& v) {
     }
     parts::waitingDots(c, midX, y, v.clock);
     const float foot = ui::kCanvasHeight - ui::kSafeInset - 130.0f;
-    if (v.resumes) parts::pressPrompt(c, parts::prompt(v.hands, false, "to resume"), midX, foot - 76.0f, 0.80f);
     parts::pressPrompt(c, parts::prompt(v.hands, true, "to leave"), midX, foot, 0.80f);
 }
 
@@ -351,13 +350,41 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
 parts::Panel aboutPanel(const AboutView& v) {
     parts::Panel p;
     p.title = "About";
-    p.options = {"Version", "Credits and licenses"};
-    p.values = {v.version, ""};
+    p.options = {"Version", "How to", "Credits and licenses"};
+    p.values = {v.version, "", ""};
     p.focused = v.focus;
     return p;
 }
 
 void drawAbout(ui::Canvas& c, const AboutView& v) { parts::panel(c, aboutPanel(v)); }
+
+// The console's How to (about.cpp): the pause and the leaving, as a friend has them (the friend's
+// pause offers Leave where the console's offers Exit to Home), and what the menus need.
+struct HowTo {
+    const char* what;
+    const char* how;
+};
+constexpr HowTo kHowTo[] = {
+    {"Pause menu", "Both sticks in (L3 + R3)"},
+    {"Leave a game", "Pause menu, Leave"},
+    {"Select", "A"},
+    {"Back", "B"},
+    {"Change screen", "L1 / R1"},
+};
+
+int howToCount() { return static_cast<int>(std::size(kHowTo)); }
+
+void drawHowTo(ui::Canvas& c, const HowToView& v) {
+    parts::Panel p;
+    p.title = "How to";
+    for (const HowTo& line : kHowTo) {
+        p.options.push_back(line.what);
+        p.values.push_back(line.how);
+    }
+    p.focused = v.focus;
+    p.top = v.top;
+    parts::panel(c, p);
+}
 
 int creditCount() { return static_cast<int>(std::size(kCredits)); }
 

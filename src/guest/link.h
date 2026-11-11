@@ -3,6 +3,9 @@
 // holds the one long `wait` request, opens an invite's sealed box for the game's name, and declines,
 // joins, ends and leaves (PROTOCOL.md in cabinet-linkup).
 //
+// In a game it is the server's half of the connection: the hello, the STUN list and the relay, and
+// the sealed boxes that carry connection details each way. The connection itself is src/game's.
+//
 // NOTHING HERE WAITS ON THE CALLER. Every request runs on one worker thread, in the order it was
 // asked, and the long `wait` runs on a thread of its own and hands what it hears to the worker, so
 // everything this keeps is the worker's alone. What happened comes back as events, which the window's
@@ -19,6 +22,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -57,6 +61,10 @@ std::vector<Listed> readFriends(json_object* answer);
 std::string openInvite(const noise::KeyPair& mine, const std::string& myName, const Listed& from, box::Reader& reader,
                        int64_t now);
 
+// A relay from the server's `relay` answer as webrtcbin takes one, `turn://user:password@host:port`,
+// or empty when it is not a `turn:` address. Exposed for the test.
+std::string turnUri(const std::string& url, const std::string& user, const std::string& password);
+
 class Link {
 public:
     // How the server answered lately, as the console's screen tells it.
@@ -73,6 +81,8 @@ public:
             SessionEnded,   // the server says `session` is over
             Left,           // this app has left its server
             Retyped,        // what answers at a new `address`: `answers`
+            Ready,          // a game's ways through: `stun`, `turn`, or `reason` the relay is not there
+            Signal,         // the host's connection `details`, for its connection `generation`
         };
         Kind kind = Kind::State;
         bool paired = false;
@@ -84,6 +94,10 @@ public:
         std::string name, invite, reason, session;
         bool ok = false;
         ServerLink::Place answers = ServerLink::Place::Nothing;
+        std::vector<std::string> stun;   // host:port, in the owner's order
+        std::string turn;
+        int generation = 0;
+        std::string details;
     };
 
     Link(std::string folder, std::function<void()> wake);
@@ -111,7 +125,13 @@ public:
     // The server takes a sign-in under a new name, from the same account, as the name changing.
     void rename(const std::string& username);
     void decline(const std::string& invite);
-    void join(const std::string& invite);
+    // cmdJoin. With `play`, a game follows: the hello goes to the host, and Ready comes once the
+    // STUN list and the relay are known. Without it, the session is only opened.
+    void join(const std::string& invite, bool play);
+    // Connection details for the host, under the connection's `generation` (sendSignal).
+    void signal(int generation, const std::string& details);
+    // How the game connected, for the server's count: `path` direct, relay or failed (PROTOCOL.md).
+    void report(const std::string& path, const std::string& reason);
     void end(const std::string& session);
     void leave();
 
@@ -134,6 +154,9 @@ private:
     void onEvents(const std::string& events);
     void setConnection(ServerLink::Outcome outcome);
     void sendState();
+    void sendSignal(int generation, const std::string& details);
+    void openSignal(const std::string& sealed);
+    void prepareConnection();
 
     std::string folder_;
     std::function<void()> wake_;
@@ -160,6 +183,17 @@ private:
     std::map<std::string, box::Reader> inviteReaders_;
     std::map<std::string, std::string> inviteSealed_;   // from the event, when a long list left it out
     std::set<std::string> saidInvited_;
+
+    // The game, from the join's answer until it ends (Conductor::Game, the friend's part).
+    struct Game {
+        std::string invite;
+        std::string session;
+        std::string host;          // the host's username, as boxes name them
+        noise::Key hostKey{};
+        box::Counter counter;
+        box::Reader reader;
+    };
+    std::optional<Game> game_;
 };
 
 }  // namespace guest

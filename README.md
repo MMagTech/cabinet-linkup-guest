@@ -24,7 +24,7 @@ and the games. They just press Start.
 - [x] Pairing with a LinkUp server
 - [x] The screens, as a gallery
 - [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
-- [ ] Picture, sound and a controller on macOS
+- [x] Picture, sound and a controller on macOS
 - [ ] The same on Windows
 - [ ] A Windows package
 
@@ -41,7 +41,8 @@ in cabinet-linkup.
 
 ## Building
 
-On a Mac, with Homebrew:
+On a Mac, with Homebrew, and GStreamer's own runtime and development packages for macOS, version
+1.28.8, from [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/download/):
 
 ```bash
 brew install cmake ninja openssl@3 json-c sdl3 sdl3_ttf
@@ -49,14 +50,16 @@ git submodule update --init
 cmake --preset default && cmake --build --preset default && ctest --preset default
 ```
 
+`-DTWOPSTART_GAME=OFF` builds everything but the game, with no GStreamer.
+
 On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28, whose OpenSSL the app uses.
 [The workflow](.github/workflows/build.yml) is the worked example.
 
 `2pstart` is the app. It opens a window, pairs on first run and keeps what it holds in a folder of
 its own; `--folder <path>` keeps it somewhere else instead, to try it as a second friend.
 `--try <file>` plays steps from a file into it and saves pictures: [trying.h](src/app/trying.h) says how.
-Until the game can be shown, Join tells the server and then ends the session at once, so the host
-is never left waiting.
+On Windows, until its picture and sound are built, Join tells the server and then ends the session
+at once, so the host is never left waiting.
 
 The close button leaves it running, so invites still reach the friend: in the tray on Windows, in
 the Dock on a Mac. Startup, in Settings, opens it at login with no window (`--startup`). Friends see

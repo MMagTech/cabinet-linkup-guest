@@ -416,6 +416,17 @@ void friendsAndInvitesAreRead() {
     std::printf("  friends are read, and invites opened\n");
 }
 
+// The relay as webrtcbin takes it, as the console's turnUri makes it: a login that says anything is
+// written so it cannot end the address early.
+void theRelayIsWrittenForWebrtcbin() {
+    check(guest::turnUri("turn:relay.example.org:3478?transport=udp", "1767225600:ab12", "p/w+=") ==
+              "turn://1767225600%3Aab12:p%2Fw%2B%3D@relay.example.org:3478",
+          "a relay's address and login were not written as webrtcbin takes them");
+    check(guest::turnUri("turn:[2001:db8::1]:3478", "u", "p") == "turn://u:p@[2001:db8::1]:3478", "an IPv6 relay was spoilt");
+    check(guest::turnUri("stun:relay.example.org:3478", "u", "p").empty(), "something that is not a relay was taken as one");
+    std::printf("  the relay is written for webrtcbin\n");
+}
+
 }  // namespace
 
 int main() {
@@ -435,6 +446,7 @@ int main() {
     idleIsTheConsolesRule();
     startupIsTheComputersOwn(rootText);
     friendsAndInvitesAreRead();
+    theRelayIsWrittenForWebrtcbin();
 
     std::filesystem::remove_all(root, ignored);
     if (failures > 0) {

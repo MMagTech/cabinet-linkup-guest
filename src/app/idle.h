@@ -5,7 +5,8 @@
 //
 // The keys and the mouse are counted anywhere on the computer, in whichever program they land: the
 // computer counts them itself. A controller it does not count, so the app adds its own presses
-// (pressed), which SDL hands it from any program while no game is being played.
+// (pressed), which SDL hands it from any program. In a game they are counted too, but only the window
+// in front sends them to the host (sendPad in session.cpp).
 
 #pragma once
 

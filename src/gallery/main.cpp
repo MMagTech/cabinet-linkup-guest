@@ -84,12 +84,11 @@ void firstRun(ui::Canvas& c, float clock, int focus, bool filled, bool connectin
     screens::drawFirstRun(c, v);
 }
 
-void waiting(ui::Canvas& c, float clock, const std::string& title, const std::string& game, bool resumes = false,
+void waiting(ui::Canvas& c, float clock, const std::string& title, const std::string& game,
              parts::Hands hands = parts::Hands::Controller) {
     screens::WaitingView v;
     v.title = title;
     v.game = game;
-    v.resumes = resumes;
     v.hands = hands;
     v.clock = clock;
     screens::drawWaiting(c, v);
@@ -156,7 +155,7 @@ std::vector<Scene> scenes() {
         {"09-waiting", "Waiting for the host", [](ui::Canvas& c, float t) { waiting(c, t, linkup::waitingFor(kHost), kGame); }},
         {"10-game", "The game", [](ui::Canvas& c, float t) { screens::drawPictureStandIn(c, kGame, t); }},
         {"11-host-paused", "The host paused",
-         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, true); }},
+         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame); }},
         {"12-paused-here", "You paused",
          [](ui::Canvas& c, float t) {
              screens::drawPictureStandIn(c, kGame, t);
@@ -261,9 +260,9 @@ std::vector<Scene> scenes() {
              parts::notice(c, "That server refused", Tone::Problem);
          }},
         {"31-waiting-keyboard", "Waiting, after the keyboard was used",
-         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, true, parts::Hands::Keyboard); }},
+         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, parts::Hands::Keyboard); }},
         {"32-waiting-mouse", "Waiting, after the mouse was used",
-         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, true, parts::Hands::Mouse); }},
+         [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame, parts::Hands::Mouse); }},
         {"33-ended-keyboard", "The host ended the session, keyboard",
          [](ui::Canvas& c, float) {
              friends(c, oneFriend(Status::Online));
@@ -365,6 +364,29 @@ std::vector<Scene> scenes() {
              p.still = t;
              p.prompt = parts::prompt(parts::Hands::Keyboard, false, "to continue");
              parts::fieldPanel(c, p);
+         }},
+        // The game's: how a game that never connected, or a host who went and stayed gone, ends
+        // (linkupConnectFailed and the minute of tickLinkUpSession on the console).
+        {"45-cant-connect", "The two never connected",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::panel(c, said(linkup::cantConnectTo(kHost), "to continue"));
+         }},
+        {"46-relay-limit", "The two never connected, the relay full",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::panel(c, said(linkup::cantConnectTo(kHost), "to continue", parts::Hands::Controller,
+                                  "The relay has reached its limit"));
+         }},
+        {"47-host-left", "The host gone for a minute",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::panel(c, said(linkup::left(kHost), "to continue"));
+         }},
+        {"48-how-to", "How to",
+         [](ui::Canvas& c, float) {
+             settings(c, look::Colour::Purple, screens::setting::About);
+             screens::drawHowTo(c, screens::HowToView{});
          }},
     };
 }
