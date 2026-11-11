@@ -20,8 +20,9 @@ and the games. They just press Start.
 
 ## Where it stands
 
-- [ ] The protocol code building and tested on Windows and macOS
+- [x] The protocol code building and tested on Windows and macOS
 - [ ] Pairing with a LinkUp server
+- [x] The screens, as a gallery
 - [ ] Picture, sound and a controller on macOS
 - [ ] The same on Windows
 - [ ] A Windows package
@@ -42,7 +43,7 @@ in cabinet-linkup.
 On a Mac, with Homebrew:
 
 ```bash
-brew install cmake ninja openssl@3 json-c
+brew install cmake ninja openssl@3 json-c sdl3 sdl3_ttf
 git submodule update --init
 cmake --preset default && cmake --build --preset default && ctest --preset default
 ```
@@ -50,9 +51,13 @@ cmake --preset default && cmake --build --preset default && ctest --preset defau
 On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28, whose OpenSSL the app uses.
 [The workflow](.github/workflows/build.yml) is the worked example.
 
+`2pstart-gallery` shows every screen with made-up friends, before any of it is wired to a server:
+Left and Right step through them. `2pstart-gallery --shots <folder>` saves a picture of each.
+
 `2pstart-cli` is the app's server side on the command line, for trying a real LinkUp server by hand
 before there is a window: `pair`, `friends`, `online` and `leave`.
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). The font in `assets/fonts` is Noto Sans, under the SIL Open Font
+Licence beside it.

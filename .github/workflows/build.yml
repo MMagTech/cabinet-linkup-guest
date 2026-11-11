@@ -34,13 +34,20 @@ jobs:
         with:
           submodules: true
       - name: Libraries
-        run: brew install openssl@3 json-c ninja
+        run: brew install openssl@3 json-c ninja sdl3 sdl3_ttf
       - name: Build
         run: |
           cmake --preset default
           cmake --build --preset default
       - name: Test
         run: ctest --preset default
+      - name: The screens, as pictures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: screens-macos
+          path: build/shots
+          if-no-files-found: ignore
 
   windows:
     name: Windows
@@ -123,3 +130,10 @@ jobs:
       - name: Test
         shell: pwsh
         run: ctest --preset windows
+      - name: The screens, as pictures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: screens-windows
+          path: build/shots
+          if-no-files-found: ignore

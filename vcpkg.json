@@ -3,6 +3,8 @@
     "version-string": "0.0.1",
     "dependencies": [
         "json-c",
+        "sdl3",
+        "sdl3-ttf",
         {
             "$comment": "ssl is Windows' own TLS, Schannel, so the app carries no second TLS library.",
             "name": "curl",
