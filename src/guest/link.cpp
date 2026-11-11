@@ -4,6 +4,7 @@
 #include "guest/link.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <memory>
@@ -29,6 +30,25 @@ std::string textOf(json_object* request) {
     const std::string text = jsonutil::text(request);
     json_object_put(request);
     return text;
+}
+
+constexpr int64_t kBoxLifeSeconds = 300;
+
+// A user name or a password inside a URL: every byte but the unreserved ones written as %XX, as
+// GLib's g_uri_escape_string does for the console.
+std::string escaped(const std::string& s) {
+    static const char* hex = "0123456789ABCDEF";
+    std::string out;
+    for (unsigned char ch : s) {
+        if (std::isalnum(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '~') {
+            out += static_cast<char>(ch);
+        } else {
+            out += '%';
+            out += hex[ch >> 4];
+            out += hex[ch & 15];
+        }
+    }
+    return out;
 }
 
 linkup::Status statusOf(const Listed& f, bool invited) {
@@ -83,6 +103,15 @@ std::string openInvite(const noise::KeyPair& mine, const std::string& myName, co
     return c.game;
 }
 
+// turnUri, conductor.cpp.
+std::string turnUri(const std::string& url, const std::string& user, const std::string& password) {
+    if (url.rfind("turn:", 0) != 0) return {};
+    std::string hostPort = url.substr(5);
+    const size_t q = hostPort.find('?');
+    if (q != std::string::npos) hostPort = hostPort.substr(0, q);
+    return "turn://" + escaped(user) + ":" + escaped(password) + "@" + hostPort;
+}
+
 // ---- Asked by the window --------------------------------------------------
 
 Link::Link(std::string folder, std::function<void()> wake)
@@ -135,6 +164,7 @@ void Link::pair(const std::string& address, const std::string& code, const std::
             inviteGames_.clear();
             inviteReaders_.clear();
             inviteSealed_.clear();
+            game_.reset();
         }
         const bool again = e.pairResult == pairing::Result::Paired && signedIn_;
         post(std::move(e));
@@ -205,23 +235,66 @@ void Link::decline(const std::string& invite) {
     });
 }
 
-// cmdJoin, as far as the session.
-void Link::join(const std::string& invite) {
-    work([this, invite]() {
+// cmdJoin. The host's name and key are taken before asking: a sign-in on the way can fetch the list
+// afresh.
+void Link::join(const std::string& invite, bool play) {
+    work([this, invite, play]() {
+        Event e;
+        e.kind = Event::Kind::Joined;
+        e.invite = invite;
+        auto it = std::find_if(friends_.begin(), friends_.end(), [&](const Listed& f) { return f.inviteId == invite; });
+        if (it == friends_.end() || !it->hasKey) {
+            post(std::move(e));
+            return;
+        }
+        Game g;
+        g.invite = invite;
+        g.host = it->username;
+        g.hostKey = it->key;
         json_object* q = requestNamed("join");
         jsonutil::set(q, "invite", invite);
         std::string answer;
         json_object* o = nullptr;
         const ServerLink::Outcome outcome = ask(textOf(q), answer, &o);
-        Event e;
-        e.kind = Event::Kind::Joined;
-        e.invite = invite;
         e.session = str(o, "session");
         e.ok = outcome == ServerLink::Outcome::Ok && !e.session.empty();
         if (o) json_object_put(o);
         // Kept until it ends, so a run that dies in it can end it next time.
         if (e.ok) keys_.setOpenSession(e.session);
+        const bool playing = e.ok && play;
+        if (playing) {
+            g.session = e.session;
+            game_ = std::move(g);
+        }
         post(std::move(e));
+        if (!playing) return;
+        // sendHello: what this app can decode, and the stream version it speaks. The picture is
+        // H.264 only, which every computer can decode.
+        json_object* hello = json_object_new_object();
+        jsonutil::set(hello, "stream", ServerLink::kStream);
+        jsonutil::set(hello, "oldest", ServerLink::kStream);
+        jsonutil::set(hello, "h265", false);
+        jsonutil::set(hello, "h264", true);
+        json_object* wrap = json_object_new_object();
+        json_object_object_add(wrap, "hello", hello);
+        sendSignal(1, textOf(wrap));
+        prepareConnection();
+    });
+}
+
+void Link::signal(int generation, const std::string& details) {
+    work([this, generation, details]() { sendSignal(generation, details); });
+}
+
+void Link::report(const std::string& path, const std::string& reason) {
+    work([this, path, reason]() {
+        if (!game_) return;
+        json_object* q = requestNamed("report");
+        jsonutil::set(q, "session", game_->session);
+        jsonutil::set(q, "path", path);
+        jsonutil::set(q, "reason", reason);
+        std::string answer;
+        ask(textOf(q), answer, nullptr);
     });
 }
 
@@ -233,6 +306,7 @@ void Link::end(const std::string& session) {
         std::string answer;
         ask(textOf(q), answer, nullptr);
         if (keys_.openSession() == session) keys_.setOpenSession("");
+        if (game_ && game_->session == session) game_.reset();
     });
 }
 
@@ -246,6 +320,7 @@ void Link::leave() {
         paired_ = false;
         signedIn_ = false;
         friends_.clear();
+        game_.reset();
         connection_ = Connection::Ok;
         ++generation_;
         Event e;
@@ -429,11 +504,14 @@ void Link::onEvents(const std::string& text) {
             e.reason = str(ev, "reason");
             post(std::move(e));
             refresh = true;
+        } else if (type == "signal") {
+            if (game_ && str(ev, "session") == game_->session) openSignal(str(ev, "sealed"));
         } else if (type == "session_ended") {
             Event e;
             e.kind = Event::Kind::SessionEnded;
             e.session = str(ev, "session");
             if (keys_.openSession() == e.session) keys_.setOpenSession("");
+            if (game_ && game_->session == e.session) game_.reset();
             post(std::move(e));
         } else if (type == "removed") {
             setConnection(ServerLink::Outcome::Removed);
@@ -468,6 +546,85 @@ void Link::sendState() {
     e.address = server ? server->address : std::string();
     e.connection = connection_;
     post(std::move(e));
+}
+
+// ---- A game ------------------------------------------------------------------
+
+// sendSignal: the details in a box only the host can open, sealed to this invite and counted.
+void Link::sendSignal(int generation, const std::string& details) {
+    if (!game_) return;
+    json_object* wrap = json_object_new_object();
+    jsonutil::set(wrap, "g", generation);
+    jsonutil::set(wrap, "d", details);
+    box::Contents c;
+    c.type = "signal";
+    c.n = game_->counter.take();
+    c.expires = static_cast<int64_t>(std::time(nullptr)) + kBoxLifeSeconds;
+    c.from = username(folder_);
+    c.to = game_->host;
+    c.details = textOf(wrap);
+    const std::string text = box::write(c);
+    noise::Bytes sealed;
+    if (!box::seal(keys_.mine(), game_->hostKey, game_->invite, noise::Bytes(text.begin(), text.end()), sealed)) return;
+    json_object* q = requestNamed("signal");
+    jsonutil::set(q, "session", game_->session);
+    jsonutil::set(q, "sealed", hexutil::toBase64(sealed));
+    std::string answer;
+    ask(textOf(q), answer, nullptr);
+}
+
+// onSignalBox, its opening: a box the host sealed for this invite, read once, and what it carries
+// handed on with its connection's number. Anything that does not open or fit is dropped.
+void Link::openSignal(const std::string& sealed) {
+    std::vector<uint8_t> raw;
+    if (!hexutil::fromBase64(sealed, raw)) return;
+    noise::Bytes plain;
+    if (!box::open(keys_.mine(), game_->hostKey, game_->invite, raw, plain)) return;
+    box::Contents c;
+    if (!game_->reader.read(plain, "signal", game_->host, username(folder_), std::time(nullptr), c)) return;
+    json_object* outer = jsonutil::parse(c.details);
+    if (!outer) return;
+    Event e;
+    e.kind = Event::Kind::Signal;
+    e.generation = static_cast<int>(jsonutil::num(outer, "g", 1));
+    e.details = str(outer, "d");
+    json_object_put(outer);
+    if (!e.details.empty()) post(std::move(e));
+}
+
+// prepareConnection, the server's half: its STUN list and the relay. Which STUN server answers is
+// the game's to find out, off this thread.
+void Link::prepareConnection() {
+    const std::string session = game_->session;
+    Event e;
+    e.kind = Event::Kind::Ready;
+    std::string answer;
+    json_object* o = nullptr;
+    ask("{\"op\":\"config\"}", answer, &o);
+    if (json_object* stun = get(o, "stun"); stun && json_object_is_type(stun, json_type_array)) {
+        for (size_t i = 0; i < json_object_array_length(stun); ++i) {
+            json_object* one = json_object_array_get_idx(stun, i);
+            if (json_object_is_type(one, json_type_string)) e.stun.push_back(json_object_get_string(one));
+        }
+    }
+    if (o) json_object_put(o);
+    o = nullptr;
+    json_object* q = requestNamed("relay");
+    jsonutil::set(q, "session", session);
+    ask(textOf(q), answer, &o);
+    json_object* relay = get(o, "relay");
+    if (relay && json_object_is_type(relay, json_type_object)) {
+        json_object* urls = get(relay, "urls");
+        if (urls && json_object_is_type(urls, json_type_array) && json_object_array_length(urls) > 0) {
+            json_object* first = json_object_array_get_idx(urls, 0);
+            if (json_object_is_type(first, json_type_string))
+                e.turn = turnUri(json_object_get_string(first), str(relay, "username"), str(relay, "password"));
+        }
+    } else {
+        e.reason = str(o, "reason");
+    }
+    if (o) json_object_put(o);
+    if (game_ && game_->session == session) post(std::move(e));
 }
 
 // ---- The long request ------------------------------------------------------

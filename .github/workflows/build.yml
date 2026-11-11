@@ -28,11 +28,48 @@ jobs:
   mac:
     name: macOS
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      # GStreamer's own runtime and development packages, from its own site and held to these
+      # checksums: the same version as Windows, for the game.
+      GST_VERSION: 1.28.8
+      GST_RUNTIME_SHA256: d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe
+      GST_DEVEL_SHA256: e6d380bc17be7eccf13e0154567d4718fc9321da822408c7ca0cd808b3d4a3f7
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: true
+
+      - name: GStreamer, from the cache
+        id: gst
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: gst-pkg
+          key: gstreamer-macos-universal-${{ env.GST_VERSION }}-1
+
+      - name: GStreamer, fetched
+        if: steps.gst.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p gst-pkg
+          base="https://gstreamer.freedesktop.org/data/pkg/osx/$GST_VERSION"
+          curl -fsSL --retry 5 --retry-all-errors -o gst-pkg/runtime.pkg "$base/gstreamer-1.0-$GST_VERSION-universal.pkg"
+          curl -fsSL --retry 5 --retry-all-errors -o gst-pkg/devel.pkg "$base/gstreamer-1.0-devel-$GST_VERSION-universal.pkg"
+          echo "$GST_RUNTIME_SHA256  gst-pkg/runtime.pkg" | shasum -a 256 -c
+          echo "$GST_DEVEL_SHA256  gst-pkg/devel.pkg" | shasum -a 256 -c
+
+      # Kept as soon as it is fetched, so a build that fails later does not fetch it again.
+      - name: GStreamer, into the cache
+        if: steps.gst.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: gst-pkg
+          key: gstreamer-macos-universal-${{ env.GST_VERSION }}-1
+
+      - name: GStreamer, installed
+        run: |
+          sudo installer -pkg gst-pkg/runtime.pkg -target /
+          sudo installer -pkg gst-pkg/devel.pkg -target /
+
       - name: Libraries
         run: brew install openssl@3 json-c ninja sdl3 sdl3_ttf
       - name: Build

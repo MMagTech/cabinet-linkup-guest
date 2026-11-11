@@ -79,6 +79,7 @@ App::App(SDL_Window* window, SDL_Renderer* renderer, const std::string& fonts, s
       }) {}
 
 App::~App() {
+    if (picture_) SDL_DestroyTexture(picture_);
     for (auto& [id, pad] : pads_) SDL_CloseGamepad(pad);
 }
 
@@ -96,11 +97,14 @@ bool App::start(std::string& why) {
     state_.on = true;
     state_.appearOffline = settings_.appearOffline;
     const Uint32 wake = wake_;
-    link_ = std::make_unique<guest::Link>(folder_, [wake]() {
+    const auto wakeUp = [wake]() {
         SDL_Event e{};
         e.type = wake;
         SDL_PushEvent(&e);
-    });
+    };
+    link_ = std::make_unique<guest::Link>(folder_, wakeUp);
+    // Started now, so GStreamer is ready by the time an invite is answered.
+    game_ = std::make_unique<game::Game>(wakeUp);
     if (!link_->start()) {
         why = "no key can be kept in " + folder_;
         return false;
@@ -121,6 +125,11 @@ bool App::start(std::string& why) {
 }
 
 void App::quit() {
+    // The host is told, and the server hears the session is over before the sign-out.
+    if (session_) {
+        game_->end(true);
+        if (!session_->id.empty()) link_->end(session_->id);
+    }
     if (link_) link_->stop(3);
 }
 
@@ -134,8 +143,8 @@ void App::fromServer() {
             case Kind::Paired: tookPaired(e); break;
             case Kind::Friends: tookFriends(std::move(e.friends)); break;
             case Kind::Invited:
-                // A person joining gets no line about anybody else.
-                if (place_ == Place::Waiting) break;
+                // A person in a game gets no line about anybody else.
+                if (place_ == Place::Game) break;
                 notice_.say(linkup::invitedYou(e.name), Tone::Info);
                 notice_.dot = screens::friendDot(state_.friends, e.name);
                 notice_.life = kInvitedSeconds;
@@ -144,9 +153,17 @@ void App::fromServer() {
                 break;
             case Kind::InviteEnded: tookInviteEnded(e.invite); break;
             case Kind::Joined: tookJoined(e); break;
-            case Kind::SessionEnded: break;
+            case Kind::SessionEnded:
+                if (session_ && place_ == Place::Game && e.session == session_->id) peerEndedSession();
+                break;
             case Kind::Left: toFirstRun(); break;
             case Kind::Retyped: tookRetyped(e); break;
+            case Kind::Ready:
+                if (session_ && session_->plays && !session_->left) game_->ready(e.stun, e.turn, e.reason);
+                break;
+            case Kind::Signal:
+                if (session_ && session_->plays && !session_->left) game_->signal(e.generation, e.details);
+                break;
         }
     }
 }
@@ -236,18 +253,36 @@ void App::tookInviteEnded(const std::string& invite) {
     if (overlay_.kind == Overlay::Kind::Panel && overlay_.answering == who) openPrompt(linkup::inviteEnded(who), "", "to continue");
 }
 
-// What a join comes to, until the game can be shown: the session the server opened is ended at
-// once, so the host is never left waiting on a friend who cannot play. Their console says the
-// friend left.
+// The join's answer (join_result). A join left before its answer is ended now. Where this computer
+// cannot play, the session the server opened is ended at once, so the host is never left waiting on
+// a friend who cannot play: their console says the friend left.
 void App::tookJoined(const guest::Link::Event& e) {
-    if (e.ok) link_->end(e.session);
-    const bool left = joinLeft_;
-    joinLeft_ = false;
-    if (left || place_ != Place::Waiting) return;
-    place_ = Place::Friends;
-    barFocused_ = tileCount() == 0;
-    if (e.ok) openPrompt(kNotYet, "", "to continue");
-    else openPrompt(linkup::notAvailable(joinHost_), "", "to continue");
+    if (!session_ || session_->invite != e.invite) {
+        if (e.ok) link_->end(e.session);
+        return;
+    }
+    if (session_->left) {
+        if (e.ok) link_->end(e.session);
+        session_.reset();
+        return;
+    }
+    const std::string host = session_->host;
+    if (!e.ok) {
+        sessionClosed();
+        openPrompt(linkup::notAvailable(host), "", "to continue");
+        return;
+    }
+    session_->id = e.session;
+    if (!session_->plays) {
+        link_->end(e.session);
+        sessionClosed();
+        openPrompt(kNotYet, "", "to continue");
+        return;
+    }
+    game::Game::Server server;
+    server.signal = [this](int generation, const std::string& details) { link_->signal(generation, details); };
+    server.report = [this](const std::string& path, const std::string& reason) { link_->report(path, reason); };
+    game_->begin(std::move(server));
 }
 
 // cmdRetype's answer: another server is asked for its code; the same, or nothing yet, is kept.
@@ -266,6 +301,10 @@ void App::tick(float dt) {
     notice_.tick(dt);
     if (std::optional<Move> m = input_.tick(dt)) move(*m);
     fromServer();
+    fromGame();
+    tickSession(dt);
+    sendPad(dt);
+    takePicture();
     if (pairingLeft_ > 0.0f) {
         pairingLeft_ -= dt;
         // Nothing came back at all (tickLinkUp).
@@ -287,13 +326,14 @@ void App::tick(float dt) {
         link_->setStatus(statusWord());
     }
     // Hidden in the tray or the Dock, what moves on screen is seen by nobody: a few frames a second at
-    // most, until something happens. The server and the idle rule still have their turn.
-    if (SDL_GetWindowFlags(window_) & SDL_WINDOW_HIDDEN) SDL_WaitEventTimeout(nullptr, 250);
+    // most, until something happens. The server and the idle rule still have their turn. Not in a
+    // game: the pad goes to the host every tenth of a second, and the sound goes on.
+    if (place_ != Place::Game && (SDL_GetWindowFlags(window_) & SDL_WINDOW_HIDDEN)) SDL_WaitEventTimeout(nullptr, 250);
 }
 
 bool App::busy() const {
-    return place_ == Place::FirstRun || place_ == Place::Waiting || typingName_ ||
-           overlay_.kind == Overlay::Kind::Field || notice_.showing() || input_.holding();
+    return place_ == Place::FirstRun || place_ == Place::Game || typingName_ || overlay_.kind == Overlay::Kind::Field ||
+           notice_.showing() || input_.holding();
 }
 
 void App::draw() {
@@ -339,10 +379,16 @@ void App::draw() {
             screens::drawSettings(canvas_, v);
             break;
         }
-        case Place::Waiting: {
+        case Place::Game: {
+            if (session_ && session_->shows == Shows::Picture) {
+                drawPicture();
+                break;
+            }
             screens::WaitingView v;
-            v.title = linkup::waitingFor(joinHost_);
-            v.game = joinGame_;
+            if (session_) {
+                v.title = session_->title;
+                v.game = session_->under;
+            }
             v.hands = hands_;
             v.clock = clock_;
             screens::drawWaiting(canvas_, v);
@@ -355,6 +401,13 @@ void App::draw() {
             parts::Panel p = overlay_.panel;
             if (overlay_.prompt) p.prompt = parts::prompt(hands_, false, overlay_.after);
             parts::panel(canvas_, p);
+            break;
+        }
+        case Overlay::Kind::HowTo: {
+            screens::HowToView v;
+            v.focus = overlay_.panel.focused;
+            v.top = overlay_.panel.top;
+            screens::drawHowTo(canvas_, v);
             break;
         }
         case Overlay::Kind::Credits: {
@@ -393,6 +446,7 @@ void App::handle(const SDL_Event& e) {
             return;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             input_.letGo();
+            if (session_) session_->l3 = session_->r3 = false;
             return;
         case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
         case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN: {
@@ -411,19 +465,39 @@ void App::handle(const SDL_Event& e) {
         case SDL_EVENT_TEXT_INPUT:
             if (typing() && e.text.text) typeText(e.text.text);
             break;
-        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_DOWN: {
             notice_.pressed();
             setHands(parts::Hands::Keyboard);
-            if (e.key.key == SDLK_F11 && !e.key.repeat) {
+            // Full screen: F11, Alt+Enter as Windows has it, and Control-Command-F as a Mac has it.
+            const bool alt = (e.key.mod & SDL_KMOD_ALT) != 0;
+            const bool ctrlCmd = (e.key.mod & SDL_KMOD_CTRL) && (e.key.mod & SDL_KMOD_GUI);
+            if (!e.key.repeat && (e.key.key == SDLK_F11 || (alt && (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER)) ||
+                                  (ctrlCmd && e.key.key == SDLK_F))) {
                 setFullScreen(!settings_.fullScreen);
                 return;
             }
+            if (takeGameEvent(e)) return;
             if (typing()) {
                 if (typeKey(e.key)) return;
             }
             break;
+        }
+        case SDL_EVENT_KEY_UP:
+            if (takeGameEvent(e)) return;
+            break;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
             notice_.pressed();
+            if (takeGameEvent(e)) return;
+            // Start, on a game's waiting screen, is the leaving its prompt offers (input.cpp).
+            if (place_ == Place::Game && overlay_.kind == Overlay::Kind::None && e.gbutton.button == SDL_GAMEPAD_BUTTON_START) {
+                setHands(parts::Hands::Controller);
+                askLeave();
+                return;
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+            if (takeGameEvent(e)) return;
             break;
         case SDL_EVENT_MOUSE_MOTION: {
             // A move of nothing is the system's, not the person's: a window appearing under the
@@ -446,7 +520,7 @@ void App::handle(const SDL_Event& e) {
             }
             break;
         case SDL_EVENT_MOUSE_WHEEL:
-            if (overlay_.kind == Overlay::Kind::Credits && e.wheel.y != 0.0f) {
+            if (overlay_.reading() && e.wheel.y != 0.0f) {
                 setHands(parts::Hands::Mouse);
                 move(e.wheel.y > 0.0f ? Move::Up : Move::Down);
                 return;
@@ -485,14 +559,7 @@ void App::move(Move m) {
     }
     switch (place_) {
         case Place::FirstRun: moveOnFirstRun(m); return;
-        case Place::Waiting:
-            // Leaving before the host's answer: the join is ended as soon as it is answered.
-            if (m == Move::Back) {
-                joinLeft_ = true;
-                place_ = Place::Friends;
-                barFocused_ = tileCount() == 0;
-            }
-            return;
+        case Place::Game: moveInGame(m); return;
         case Place::Friends:
         case Place::Settings: break;
     }
@@ -669,16 +736,17 @@ void App::moveOnOverlay(Move m) {
         }
         return;
     }
-    if (o.kind == Overlay::Kind::Credits) {
+    if (o.reading()) {
         // Nothing to choose: A or B closes it.
         if (m == Move::Press || m == Move::Back) {
             closeOverlay();
             return;
         }
-        const moves::Step s = moves::column(o.panel.focused, screens::creditCount(), m, false);
+        const int lines = o.kind == Overlay::Kind::HowTo ? screens::howToCount() : screens::creditCount();
+        const moves::Step s = moves::column(o.panel.focused, lines, m, false);
         if (s.then == Then::Moved) {
             o.panel.focused = s.focus;
-            o.panel.top = moves::topFor(s.focus, o.panel.top, screens::creditCount(), parts::kPanelRows);
+            o.panel.top = moves::topFor(s.focus, o.panel.top, lines, parts::kPanelRows);
         }
         return;
     }
@@ -730,7 +798,7 @@ void App::pointAt(float x, float y, bool click) {
     if (overlay_.kind != Overlay::Kind::None) {
         const bool hit = spotAt(x, y, s, true);
         const bool option = hit && s.id >= spot::kOption && s.id < spot::kField;
-        if (option && (overlay_.kind == Overlay::Kind::Panel || overlay_.kind == Overlay::Kind::Credits))
+        if (option && (overlay_.kind == Overlay::Kind::Panel || overlay_.reading()))
             overlay_.panel.focused = s.id - spot::kOption;
         if (!click) return;
         if (overlay_.prompt) {
@@ -738,7 +806,7 @@ void App::pointAt(float x, float y, bool click) {
             return;
         }
         if (!hit) move(Move::Back);
-        else if (option || (overlay_.kind == Overlay::Kind::Credits && s.id == spot::kPanel)) move(Move::Press);
+        else if (option || (overlay_.reading() && s.id == spot::kPanel)) move(Move::Press);
         else if (overlay_.kind == Overlay::Kind::Field && s.id == spot::kField) clickCaret(s.id, cx, false);
         return;
     }
@@ -784,7 +852,10 @@ void App::pointAt(float x, float y, bool click) {
             if (typingName_) clickCaret(s.id, cx, false);
             return;
         }
-        case Place::Waiting: return;
+        case Place::Game:
+            // A click is A: on a paused host's screen, it resumes. A right-click is Back.
+            if (click && session_ && session_->resumes) move(Move::Press);
+            return;
     }
 }
 
@@ -918,13 +989,18 @@ void App::answerInvite(const linkup::Friend& f) {
     overlay_.answering = f.name;
 }
 
+// linkupJoin: Waiting for the host, with the game's name, until the two are connected and the host's
+// picture comes.
 void App::join(const linkup::Friend& f) {
     if (notice_.text == linkup::invitedYou(f.name)) notice_.clear();
-    joinHost_ = f.name;
-    joinGame_ = f.game;
-    joinLeft_ = false;
-    place_ = Place::Waiting;
-    link_->join(f.invite);
+    session_.emplace();
+    session_->host = f.name;
+    session_->game = f.game;
+    session_->invite = f.invite;
+    session_->plays = game_->canPlay();
+    place_ = Place::Game;
+    showWaiting(linkup::waitingFor(f.name), f.game);
+    link_->join(f.invite, session_->plays);
 }
 
 void App::decline(const linkup::Friend& f) {
@@ -947,7 +1023,8 @@ void App::serverPanel() {
     });
 }
 
-// About, as the console's Settings has it. Version is only read; Credits and licenses opens the list.
+// About, as the console's Settings has it. Version is only read; How to and Credits and licenses
+// open their lists.
 void App::aboutPanel(int focus) {
     screens::AboutView v;
     v.version = TWOPSTART_VERSION;
@@ -955,9 +1032,9 @@ void App::aboutPanel(int focus) {
     openPanel(screens::aboutPanel(v), [this](int answer) {
         if (answer == 0) {
             aboutPanel(0);
-        } else if (answer == 1) {
+        } else if (answer == 1 || answer == 2) {
             overlay_ = Overlay{};
-            overlay_.kind = Overlay::Kind::Credits;
+            overlay_.kind = answer == 1 ? Overlay::Kind::HowTo : Overlay::Kind::Credits;
         }
     });
 }
@@ -1112,6 +1189,13 @@ bool App::elsewhere(const SDL_Event& e) {
                      e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
     if (!pad || (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS)) return false;
     if (byHands(e)) idle_.pressed();
+    return true;
+}
+
+bool App::closeInGame(const SDL_Event& e) {
+    if (e.type != SDL_EVENT_WINDOW_CLOSE_REQUESTED || SDL_GetWindowFromID(e.window.windowID) != window_) return false;
+    if (place_ != Place::Game || !session_) return false;
+    if (overlay_.kind == Overlay::Kind::None) askLeave();
     return true;
 }
 

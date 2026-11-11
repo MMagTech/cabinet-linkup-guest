@@ -3,7 +3,8 @@
 #   cmake --preset default && cmake --build --preset default && ctest --preset default
 #
 # The console's own LinkUp code is built straight from cabinetos/, the CabinetOS submodule, and is
-# never edited or copied by hand. What Windows lacks is filled in from src/win/.
+# never edited or copied by hand. What Windows lacks is filled in from src/win/, and the one piece of
+# PipeWire the console's sound queue uses from src/pipewire/.
 
 cmake_minimum_required(VERSION 3.25)
 project(cabinet-linkup-guest VERSION 0.0.1 LANGUAGES CXX)
@@ -24,7 +25,15 @@ endif()
 # on it: -DGSTREAMER_ROOT=<where GStreamer is installed>. GStreamer names its import library
 # lib/crypto.lib, which CMake's own search does not expect, so the target is made here.
 # On a Mac it is Homebrew's, which CMake does not find by itself.
-set(GSTREAMER_ROOT "" CACHE PATH "Where GStreamer is installed (Windows)")
+#
+# GStreamer itself is GStreamer's own build, from its installer, on every system: the same version
+# from the same place, held to its checksum in .github/workflows/build.yml.
+if(APPLE)
+    set(gst_default "/Library/Frameworks/GStreamer.framework/Versions/1.0")
+else()
+    set(gst_default "")
+endif()
+set(GSTREAMER_ROOT "${gst_default}" CACHE PATH "Where GStreamer is installed")
 if(WIN32 AND GSTREAMER_ROOT)
     file(TO_CMAKE_PATH "${GSTREAMER_ROOT}" gst)
     if(NOT EXISTS "${gst}/lib/crypto.lib" OR NOT EXISTS "${gst}/include/openssl/opensslv.h")
@@ -105,6 +114,44 @@ add_library(guest STATIC
 target_include_directories(guest PUBLIC src)
 target_link_libraries(guest PUBLIC linkup_protocol)
 
+# The game: its connection, its picture and its sound (src/game), and the console's own connection
+# code, rtc.cpp, as it is written. Built on a Mac for now. Windows plays nothing until its picture and
+# sound are built: src/game/none.cpp stands in there, and Join ends the session at once. The same
+# stand-in builds anywhere with -DTWOPSTART_GAME=OFF, for working on the rest with no GStreamer.
+option(TWOPSTART_GAME "Build the game's picture, sound and connection" ${APPLE})
+#
+# The console's sound queue is cut out of friend_sound.cpp, where it sits beside PipeWire, into a file
+# of its own (cmake/SoundQueue.cmake). It is built on every system, for the Noise test.
+include(cmake/SoundQueue.cmake)
+set(GENERATED "${CMAKE_BINARY_DIR}/generated")
+sound_queue("${LINKUP}/friend_sound.h" "${LINKUP}/friend_sound.cpp" "${GENERATED}")
+add_library(sound_queue STATIC "${GENERATED}/sound_queue.cpp")
+target_include_directories(sound_queue PUBLIC "${GENERATED}" "${CMAKE_SOURCE_DIR}/src/pipewire")
+
+if(TWOPSTART_GAME)
+    # GStreamer's own pkg-config, and its files, which say where everything is inside its framework.
+    # Here only: what was found before this, for curl, keeps its own.
+    find_package(PkgConfig REQUIRED)
+    if(EXISTS "${GSTREAMER_ROOT}/bin/pkg-config")
+        set(PKG_CONFIG_EXECUTABLE "${GSTREAMER_ROOT}/bin/pkg-config")
+    endif()
+    if(NOT EXISTS "${GSTREAMER_ROOT}/lib/pkgconfig/gstreamer-webrtc-1.0.pc")
+        message(FATAL_ERROR "No GStreamer at ${GSTREAMER_ROOT}. Install GStreamer's own runtime and development "
+                            "packages for macOS (the version in .github/workflows/build.yml), or set -DGSTREAMER_ROOT.")
+    endif()
+    set(ENV{PKG_CONFIG_PATH} "${GSTREAMER_ROOT}/lib/pkgconfig")
+    pkg_check_modules(GST REQUIRED IMPORTED_TARGET
+        gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-webrtc-1.0 gstreamer-sdp-1.0)
+    add_library(game STATIC src/game/game.cpp src/game/stream.cpp src/game/sound.cpp "${LINKUP}/rtc.cpp")
+    target_link_libraries(game PUBLIC sound_queue PkgConfig::GST)
+    # As the console's linkup/Makefile: webrtcbin's library says it may still change.
+    target_compile_definitions(game PUBLIC GST_USE_UNSTABLE_API)
+else()
+    add_library(game STATIC src/game/none.cpp)
+endif()
+target_include_directories(game PUBLIC src "${BORROWED}")
+target_link_libraries(game PUBLIC linkup_protocol SDL3::SDL3)
+
 add_executable(2pstart-cli src/cli/main.cpp)
 target_link_libraries(2pstart-cli PRIVATE guest)
 
@@ -163,19 +210,18 @@ target_link_libraries(app_core PUBLIC app_system)
 
 # The app: its window, and what each press does. On Windows it opens with no console window behind
 # it. The fonts go beside it.
-add_executable(2pstart WIN32 src/app/main.cpp src/app/app.cpp src/app/trying.cpp)
-target_link_libraries(2pstart PRIVATE app_core)
+add_executable(2pstart WIN32 src/app/main.cpp src/app/app.cpp src/app/session.cpp src/app/trying.cpp)
+target_link_libraries(2pstart PRIVATE app_core game)
 add_custom_command(TARGET 2pstart POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:2pstart>/assets")
 
 enable_testing()
 
 # CabinetOS's Noise test, against the published vectors and the server's own answers, which sit
-# beside it in the submodule. Its ninth part does not build here yet (cmake/NoiseTestWithoutSound.cmake).
-include(cmake/NoiseTestWithoutSound.cmake)
-noise_test_without_sound("${LINKUP}/noise-test.cpp" "${CMAKE_BINARY_DIR}/generated/noise-test.cpp")
-add_executable(noise-test "${CMAKE_BINARY_DIR}/generated/noise-test.cpp")
-target_link_libraries(noise-test PRIVATE linkup_protocol)
+# beside it in the submodule. All of it: its ninth part holds the sound queue to a host's clock.
+noise_test_with_queue("${LINKUP}/noise-test.cpp" "${GENERATED}/noise-test.cpp")
+add_executable(noise-test "${GENERATED}/noise-test.cpp")
+target_link_libraries(noise-test PRIVATE linkup_protocol sound_queue)
 add_test(NAME noise-test COMMAND noise-test "${LINKUP}")
 
 add_executable(guest-test tests/guest_test.cpp)

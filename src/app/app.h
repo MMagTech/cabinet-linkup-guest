@@ -1,7 +1,8 @@
 // 2P Start's window: what is on screen, and what each press does. It is the friend's side of the
 // console's LinkUp screens (linkup.cpp, linkupflow.cpp and linkupsession.cpp in CabinetOS): first
-// run in place of the console's Add a server, the list of friends, Settings, and the panels over
-// them. The server is guest::Link's; the drawing is the screens'; this joins the two.
+// run in place of the console's Add a server, the list of friends, Settings, the panels over them,
+// and a game. The server is guest::Link's, the game's connection is game::Game's, and the drawing is
+// the screens'; this joins them. The game's part is session.cpp.
 //
 // Everything here runs on the window's thread. Nothing in it waits on the network.
 
@@ -9,6 +10,7 @@
 
 #include <functional>
 #include <map>
+#include <optional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,6 +21,7 @@
 #include "app/input.h"
 #include "app/notice.h"
 #include "app/textline.h"
+#include "game/game.h"
 #include "guest/link.h"
 #include "guest/settings.h"
 #include "linkuprules.h"
@@ -40,11 +43,19 @@ public:
     // A controller pressed with another program in front: true when `e` is one, which the menus do not
     // take (idle.h). Before handle.
     bool elsewhere(const SDL_Event& e);
+    // The window's close button in a game: true when `e` is that, and the game is paused or the
+    // question to leave is asked, as Start asks, rather than the game going on hidden. Before the tray.
+    bool closeInGame(const SDL_Event& e);
     void tick(float dt);
     // The frame, not yet shown: the caller presents it.
     void draw();
     // Something moves or counts down, so frames are wanted. Otherwise the window can sleep.
     bool busy() const;
+    // The game's picture is all there is: a frame is drawn only when a new picture has come, as soon
+    // as it has, with no wait for the screen (linkupPictureOnly).
+    bool live() const;
+    // A new picture came this tick.
+    bool fresh() const { return fresh_; }
     // Signs out, a few seconds at the most.
     void quit();
 
@@ -59,11 +70,13 @@ public:
     bool sayStillRunning();
 
 private:
-    enum class Place { FirstRun, Friends, Settings, Waiting };
+    enum class Place { FirstRun, Friends, Settings, Game };
 
-    // What is over the screen: a question or a line (Panel), the credits, or a line to type.
+    // What is over the screen: a question or a line (Panel), a list to read (the credits, How to),
+    // or a line to type.
     struct Overlay {
-        enum class Kind { None, Panel, Credits, Field };
+        enum class Kind { None, Panel, Credits, HowTo, Field };
+        bool reading() const { return kind == Kind::Credits || kind == Kind::HowTo; }
         Kind kind = Kind::None;
         parts::Panel panel;
         // A line and a prompt, with no answers: A, Enter or a click goes on. `after` is the prompt's
@@ -89,6 +102,30 @@ private:
     void tookJoined(const guest::Link::Event& e);
     void tookRetyped(const guest::Link::Event& e);
     std::string statusWord() const;
+
+    // A game (session.cpp), the friend's side of linkupsession.cpp, each named for the function there.
+    void fromGame();
+    void tickSession(float dt);
+    void sendPad(float dt);
+    bool takeGameEvent(const SDL_Event& e);
+    void moveInGame(moves::Move m);
+    void fromPeer(const std::string& word, const std::string& game);
+    void connected();
+    void connectFailed(const std::string& reason);
+    void friendPicture(bool on);
+    void askLeave();
+    void friendAsksPause();
+    void friendLeaves();
+    void idlePause();
+    void peerLost();
+    void peerBack();
+    void peerEndedSession();
+    void sessionClosed();
+    void showWaiting(const std::string& title, const std::string& under);
+    bool pictureBehind() const;
+    void takePicture();
+    void drawPicture();
+    SDL_Gamepad* playingPad() const;
 
     // Moving and pressing.
     void move(moves::Move m);
@@ -182,9 +219,37 @@ private:
     bool typingName_ = false;
     std::string typedName_;
 
-    // A join, until the game can be shown: asked, then ended as soon as it is answered.
-    std::string joinHost_, joinGame_;
-    bool joinLeft_ = false;      // Back was pressed while it was asked
+    // A game, as the friend's console holds one (linkupSide, linkupPlay and the rest in
+    // linkupsession.cpp): from Join until it ends, and past that only while a join left before its
+    // answer waits to be ended.
+    enum class Shows { Waiting, Picture, Reconnecting };
+    struct Session {
+        std::string host, game;       // who hosts, and the game, as the host last named it
+        std::string invite, id;       // the invite answered, and the session the server opened
+        bool left = false;            // left before the join was answered: ended once it is
+        bool plays = false;           // this computer can play it (game::Game::canPlay)
+        bool streamUp = false;
+        bool showsPicture = false;    // the host's picture is on
+        bool pausedHere = false;      // a panel here has the game stopped for both
+        bool pausedThere = false;
+        bool lost = false;
+        float lostFor = 0.0f;
+        Shows shows = Shows::Waiting;
+        std::string title;            // what Waiting and Reconnecting say
+        std::string under;            // the game, under it
+        bool resumes = false;         // the host paused, and either can resume
+        linkupwire::Pad sent;
+        uint16_t seq = 0;
+        float padAge = 0.0f;
+        bool pressHere = false;
+        float pressAge = 0.0f;
+        bool l3 = false, r3 = false;
+    };
+    std::optional<Session> session_;
+    std::unique_ptr<game::Game> game_;
+    SDL_Texture* picture_ = nullptr;
+    bool fresh_ = false;
+    bool liveDrawn_ = false;     // the swap wait is off for the picture
 
     std::vector<SDL_JoystickID> padIds_;
     std::map<SDL_JoystickID, SDL_Gamepad*> pads_;

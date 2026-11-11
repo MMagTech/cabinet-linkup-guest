@@ -33,12 +33,12 @@ std::vector<int> tileOrder(const std::vector<linkup::Friend>& friends);
 // The colour of an invite's dot: the friend's own, brighter (LinkUpScreen::dotColour).
 ui::Color friendDot(const std::vector<linkup::Friend>& friends, const std::string& name);
 
-// A session with no picture to show: waiting for the host, the host paused, or trying again.
+// A session with no picture to show: waiting for the host, the host paused, or trying again. One
+// prompt, "Press (B) to leave", as the console's LinkUpPlayScreen has it: where the host paused, A
+// resumes too, and nothing says so.
 struct WaitingView {
     std::string title;     // "Waiting for Riley"
     std::string game;      // under it, when one is known
-    // "Press (A) to resume" above "Press (B) to leave", when the host paused and either may resume.
-    bool resumes = false;
     parts::Hands hands = parts::Hands::Controller;
     float clock = 0.0f;
 };
@@ -81,8 +81,8 @@ enum Row : int { Name, Colour, FullScreen, Startup, Controller, Server, About, C
 }
 void drawSettings(ui::Canvas& c, const SettingsView& v);
 
-// About, as the console's Settings has it: the version, and Credits and licenses. A list over
-// Settings; `focus` is a line.
+// About, as the console's Settings has it: the version, How to, and Credits and licenses. A list
+// over Settings; `focus` is a line.
 struct AboutView {
     std::string version;
     int focus = 0;
@@ -98,5 +98,14 @@ struct CreditsView {
 };
 int creditCount();
 void drawCredits(ui::Canvas& c, const CreditsView& v);
+
+// How to: what playing needs, in the console's own lines (about.cpp, "In a game" and "Menus"), only
+// those that are a friend's. A list over Settings with nothing to press; `focus` is a line.
+struct HowToView {
+    int focus = 0;
+    int top = 0;
+};
+int howToCount();
+void drawHowTo(ui::Canvas& c, const HowToView& v);
 
 }  // namespace screens

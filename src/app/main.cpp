@@ -8,10 +8,13 @@
 //   2pstart --startup           as at login (startup.h): running, with no window until it is opened
 //
 // One runs for each folder: started again, it brings back the one running (tray.h). Its window's
-// close button hides it, and the app keeps running in the tray or the Dock until it is quit.
+// close button hides it, and the app keeps running in the tray or the Dock until it is quit. In a
+// game the close button pauses it or asks to leave instead.
 //
 // The loop draws at the screen's rate while something moves, and otherwise sleeps until something
-// happens: a press, a window change, or the server's threads saying they have news.
+// happens: a press, a window change, or the server's threads saying they have news. While a game's
+// picture is all there is, it wakes for each new picture or press, and draws a picture as soon as it
+// comes, with no wait for the screen (App::live): the console measured that wait at 44 to 50 ms.
 
 #include <algorithm>
 #include <cstdio>
@@ -125,22 +128,34 @@ int main(int argc, char* argv[]) {
         });
         const auto handle = [&](const SDL_Event& e) {
             if (e.type == SDL_EVENT_QUIT) running = false;
+            else if (app.closeInGame(e)) return;
             else if (tray.take(e)) return;
             else if (tryingIt && fromHands(e)) return;
             else if (!app.elsewhere(e)) app.handle(e);
         };
 
         Uint64 last = SDL_GetTicksNS();
+        bool liveShown = false;
         while (running) {
             SDL_Event e;
-            // Asleep until something happens, unless something on screen moves.
-            if (!app.busy() && !tryingIt && SDL_WaitEventTimeout(&e, 1000)) handle(e);
+            const bool live = app.live() && !tryingIt;
+            // Asleep until something happens, unless something on screen moves. A game's picture
+            // wakes it too; a few milliseconds at most, so the pad is read that often.
+            if (live) {
+                if (SDL_WaitEventTimeout(&e, 4)) handle(e);
+            } else if (!app.busy() && !tryingIt && SDL_WaitEventTimeout(&e, 1000)) {
+                handle(e);
+            }
             while (SDL_PollEvent(&e)) handle(e);
             const Uint64 now = SDL_GetTicksNS();
             const float dt = static_cast<float>(static_cast<double>(now - last) / 1e9);
             last = now;
             app.tick(std::min(dt, 0.25f));
             if (tryingIt && !trying.play(dt, app, renderer)) running = false;
+            // The picture alone, with no new one: nothing to draw.
+            const bool liveNow = app.live() && !tryingIt;
+            if (liveNow && liveShown && !app.fresh()) continue;
+            liveShown = liveNow;
             app.draw();
             trying.takeShot(renderer);
             SDL_RenderPresent(renderer);
