@@ -69,6 +69,14 @@ struct Rect {
     Color shadowColor = Color::black(0);
 };
 
+// Something on a screen a pointer can point at, where it was drawn, in canvas points. Its id says
+// what it is (parts.h, spot).
+struct Spot {
+    int id = 0;
+    float x = 0, y = 0, w = 0, h = 0;
+    bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
+};
+
 // The console's type sizes, in canvas points (text.cpp).
 enum class TextStyle { LargeTitle, Title2, Title3, Callout, Body, Footnote, Caption1 };
 
@@ -91,6 +99,18 @@ public:
     // Drawing kept to this part of the canvas, until cleared.
     void setClip(float x, float y, float w, float h);
     void clearClip();
+
+    // Where a pixel of the output is on the canvas.
+    void toCanvas(float px, float py, float& cx, float& cy) const {
+        cx = (px - ox_) / scale_;
+        cy = (py - oy_) / scale_;
+    }
+
+    // What a pointer can land on, recorded by the screens as they draw it, in the order drawn: the
+    // last is on top. Cleared at the start of each frame.
+    void spot(int id, float x, float y, float w, float h) { spots_.push_back({id, x, y, w, h}); }
+    const std::vector<Spot>& spots() const { return spots_; }
+    void clearSpots() { spots_.clear(); }
 
     void setLook(const Look& look) { look_ = look; }
     Color surface() const { return look_.surface; }
@@ -125,6 +145,7 @@ private:
     float scale_ = 1.0f, ox_ = 0.0f, oy_ = 0.0f;
     float alpha_ = 1.0f;
     Look look_;
+    std::vector<Spot> spots_;
     std::map<std::pair<int, int>, TTF_Font*> opened_;     // by weight and pixel size
     std::map<std::string, Written> texts_;
 };

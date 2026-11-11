@@ -95,10 +95,13 @@ else()
     target_sources(linkup_protocol PRIVATE "${FRONTEND}/fileio.cpp")
 endif()
 
-# 2P Start's own: who this friend is to a server, and where the app keeps its folder.
+# 2P Start's own: who this friend is to a server, where the app keeps its folder and its settings,
+# and the friend's side of the server.
 add_library(guest STATIC
     src/guest/account.cpp
-    src/guest/paths.cpp)
+    src/guest/link.cpp
+    src/guest/paths.cpp
+    src/guest/settings.cpp)
 target_include_directories(guest PUBLIC src)
 target_link_libraries(guest PUBLIC linkup_protocol)
 
@@ -130,6 +133,20 @@ target_link_libraries(2pstart-gallery PRIVATE screens)
 add_custom_command(TARGET 2pstart-gallery POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:2pstart-gallery>/assets")
 
+# The app's parts with no window: where focus goes, what the hands ask for, and what a line keeps.
+add_library(app_core STATIC
+    src/app/input.cpp
+    src/app/moves.cpp
+    src/app/textline.cpp)
+target_link_libraries(app_core PUBLIC guest screens)
+
+# The app: its window, and what each press does. On Windows it opens with no console window behind
+# it. The fonts go beside it.
+add_executable(2pstart WIN32 src/app/main.cpp src/app/app.cpp src/app/trying.cpp)
+target_link_libraries(2pstart PRIVATE app_core)
+add_custom_command(TARGET 2pstart POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:2pstart>/assets")
+
 enable_testing()
 
 # CabinetOS's Noise test, against the published vectors and the server's own answers, which sit
@@ -143,6 +160,10 @@ add_test(NAME noise-test COMMAND noise-test "${LINKUP}")
 add_executable(guest-test tests/guest_test.cpp)
 target_link_libraries(guest-test PRIVATE guest)
 add_test(NAME guest-test COMMAND guest-test)
+
+add_executable(app-test tests/app_test.cpp)
+target_link_libraries(app-test PRIVATE app_core)
+add_test(NAME app-test COMMAND app-test)
 
 # Every screen drawn once into memory and saved: a screen that cannot be drawn fails here.
 add_test(NAME gallery-shots COMMAND 2pstart-gallery --shots "${CMAKE_BINARY_DIR}/shots")
