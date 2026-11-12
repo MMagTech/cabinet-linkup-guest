@@ -149,6 +149,11 @@ void Canvas::backdrop(float alpha) {
     SDL_RenderGeometry(renderer_, nullptr, v, 6, at, 12);
 }
 
+void Canvas::dim(float alpha) {
+    SDL_SetRenderDrawColorFloat(renderer_, 0.0f, 0.0f, 0.0f, alpha * alpha_);
+    SDL_RenderFillRect(renderer_, nullptr);
+}
+
 void Canvas::draw(const Rect& r) {
     // Edges sit on whole pixels, so a straight side is sharp and its one-pixel fade is even.
     const float x = std::round(ox_ + px(r.x)), y = std::round(oy_ + px(r.y));

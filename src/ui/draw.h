@@ -143,10 +143,13 @@ public:
 
     // The menus' background, over the whole window. `alpha` under 1 lays it over what is there.
     void backdrop(float alpha = 1.0f);
+    // Black at `alpha` over the whole window, not only the canvas: a screen darkened under a panel,
+    // to the window's edges on a screen shaped other than a TV.
+    void dim(float alpha);
     void draw(const Rect& r);
-    // The bars around the host's game and the glow over them (glow.h): `screen` is where its whole
-    // screen is on the output, in pixels, and `place` where its game sits on it, in canvas points.
-    void glow(const SDL_FRect& screen, const SDL_FRect& place) { glow_.draw(screen, place); }
+    // The bars around the host's game and the glow over them (glow.h): `screen` is the screen they
+    // fill and `game` where the game is on it, both in the output's pixels.
+    void glow(const SDL_FRect& screen, const SDL_FRect& game) { glow_.draw(screen, game); }
 
     float measure(const std::string& s, TextStyle st);
     float lineHeight(TextStyle st);

@@ -8,8 +8,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "ui/draw.h"
-
 namespace ui {
 
 namespace {
@@ -31,24 +29,18 @@ Glow::~Glow() {
     if (texture_) SDL_DestroyTexture(texture_);
 }
 
-void Glow::draw(const SDL_FRect& screen, const SDL_FRect& place) {
+void Glow::draw(const SDL_FRect& screen, const SDL_FRect& game) {
     // The screen and the game's edges on this window's whole pixels, the game kept on the screen
-    // whatever the host said (LinkUpPlayScreen::setPlace and drawPlace).
+    // (LinkUpPlayScreen::drawPlace).
     const int x = static_cast<int>(std::lround(screen.x));
     const int y = static_cast<int>(std::lround(screen.y));
     const int w = static_cast<int>(std::lround(screen.x + screen.w)) - x;
     const int h = static_cast<int>(std::lround(screen.y + screen.h)) - y;
-    if (w <= 0 || h <= 0) return;
-    const float px = std::clamp(place.x, 0.0f, kCanvasWidth);
-    const float py = std::clamp(place.y, 0.0f, kCanvasHeight);
-    const float pw = std::clamp(place.w, 0.0f, kCanvasWidth - px);
-    const float ph = std::clamp(place.h, 0.0f, kCanvasHeight - py);
-    if (pw <= 0.0f || ph <= 0.0f) return;
-    const double kx = static_cast<double>(w) / kCanvasWidth, ky = static_cast<double>(h) / kCanvasHeight;
-    const int left = std::clamp(static_cast<int>(std::lround(px * kx)), 0, w);
-    const int right = std::clamp(static_cast<int>(std::lround((px + pw) * kx)), left, w);
-    const int top = std::clamp(static_cast<int>(std::lround(py * ky)), 0, h);
-    const int bottom = std::clamp(static_cast<int>(std::lround((py + ph) * ky)), top, h);
+    if (w <= 0 || h <= 0 || game.w <= 0.0f || game.h <= 0.0f) return;
+    const int left = std::clamp(static_cast<int>(std::lround(game.x)) - x, 0, w);
+    const int right = std::clamp(static_cast<int>(std::lround(game.x + game.w)) - x, left, w);
+    const int top = std::clamp(static_cast<int>(std::lround(game.y)) - y, 0, h);
+    const int bottom = std::clamp(static_cast<int>(std::lround(game.y + game.h)) - y, top, h);
 
     const bool same = texture_ && x == x_ && y == y_ && w == w_ && h == h_ && left == left_ && right == right_ &&
                       top == top_ && bottom == bottom_;

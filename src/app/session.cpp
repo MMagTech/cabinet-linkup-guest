@@ -140,7 +140,10 @@ void App::tookPlace(json_object* message) {
         if (!json_object_object_get_ex(message, names[i], &n)) return;
         v[i] = static_cast<float>(json_object_get_double(n));
     }
-    const SDL_FRect place{v[0], v[1], v[2], v[3]};
+    // From the other computer, so kept on its screen whatever it says (LinkUpPlayScreen::setPlace).
+    const float x = std::clamp(v[0], 0.0f, ui::kCanvasWidth), y = std::clamp(v[1], 0.0f, ui::kCanvasHeight);
+    const SDL_FRect place{x, y, std::clamp(v[2], 0.0f, ui::kCanvasWidth - x), std::clamp(v[3], 0.0f, ui::kCanvasHeight - y)};
+    if (place.w <= 0.0f || place.h <= 0.0f) return;
     if (!session_->place || std::memcmp(&*session_->place, &place, sizeof place) != 0)
         std::fprintf(stderr, "[game] the host's game sits at %.0f,%.0f, %.0f by %.0f\n", place.x, place.y, place.w, place.h);
     session_->place = place;
@@ -437,8 +440,11 @@ void App::takePicture() {
     });
 }
 
-// The host's picture, as large as the window allows, its shape kept, black around it; and where the
-// host said its game sits, the bars and the glow around that, drawn here (ui/glow.h).
+// The host's game, as large as the window allows, its shape kept. Where the host said its game sits,
+// that is what is fitted, not the host's whole screen, so a game narrower than a TV fills a taller
+// window's height, and its bars are cut where the window ends; around it, to the window's edges, the
+// bars and the glow are drawn here (ui/glow.h). With no word from the host, its whole screen, with
+// black around it.
 void App::drawPicture() {
     if (!picture_) return;
     int ow = 0, oh = 0;
@@ -446,8 +452,15 @@ void App::drawPicture() {
     float w = 0, h = 0;
     SDL_GetTextureSize(picture_, &w, &h);
     if (w <= 0 || h <= 0 || ow <= 0 || oh <= 0) return;
-    const float scale = std::min(static_cast<float>(ow) / w, static_cast<float>(oh) / h);
-    SDL_FRect at{(static_cast<float>(ow) - w * scale) * 0.5f, (static_cast<float>(oh) - h * scale) * 0.5f, w * scale, h * scale};
+    const std::optional<SDL_FRect>& place = session_ ? session_->place : std::nullopt;
+    const float kx = w / ui::kCanvasWidth, ky = h / ui::kCanvasHeight;
+    const SDL_FRect game = place ? SDL_FRect{place->x * kx, place->y * ky, place->w * kx, place->h * ky} : SDL_FRect{0, 0, w, h};
+    const float fw = static_cast<float>(ow), fh = static_cast<float>(oh);
+    const float scale = std::min(fw / game.w, fh / game.h);
+    const SDL_FRect at{fw * 0.5f - (game.x + game.w * 0.5f) * scale, fh * 0.5f - (game.y + game.h * 0.5f) * scale, w * scale,
+                       h * scale};
     SDL_RenderTexture(renderer_, picture_, nullptr, &at);
-    if (session_ && session_->place) canvas_.glow(at, *session_->place);
+    if (place)
+        canvas_.glow(SDL_FRect{0, 0, fw, fh},
+                     SDL_FRect{at.x + game.x * scale, at.y + game.y * scale, game.w * scale, game.h * scale});
 }

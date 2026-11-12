@@ -13,6 +13,9 @@
 // the picture's width; a still noise dither in both the black and the glow, so a long near-black
 // ramp does not band on an 8-bit screen; the edges on whole pixels of this screen.
 //
+// THE SCREEN IS THIS WINDOW, as the console's is its own TV: a window shaped other than a TV has its
+// dead space all round the game, and the glow fills it to the window's edges.
+//
 // The console does it in a shader each frame. SDL's renderer has none, so this works out the same
 // pixels once, into a texture, and makes it again only when the place or the window's size changes.
 
@@ -32,10 +35,9 @@ public:
     Glow(const Glow&) = delete;
     Glow& operator=(const Glow&) = delete;
 
-    // `screen` is where the host's whole screen is drawn, in this window's pixels; `place` is where
-    // its game sits on that screen, in the console's canvas points (1920 by 1080). Draws the bars
-    // and the glow around the game, over whatever is there.
-    void draw(const SDL_FRect& screen, const SDL_FRect& place);
+    // `screen` is the screen the glow fills and `game` where the game is drawn on it, both in this
+    // window's pixels. Draws the bars and the glow around the game, over whatever is there.
+    void draw(const SDL_FRect& screen, const SDL_FRect& game);
 
 private:
     SDL_Renderer* renderer_;

@@ -167,7 +167,9 @@ std::vector<Scene> scenes() {
         {"10a-game-bars", "The game, its bars and glow drawn here",
          [](ui::Canvas& c, float t) {
              screens::drawPictureStandIn(c, kGame, t);
-             c.glow(c.onOutput(), SDL_FRect{240.0f, 0.0f, 1440.0f, 1080.0f});
+             const SDL_FRect screen = c.onOutput();
+             const float k = screen.w / ui::kCanvasWidth;
+             c.glow(screen, SDL_FRect{screen.x + 240.0f * k, screen.y, 1440.0f * k, screen.h});
          }},
         {"11-host-paused", "The host paused",
          [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame); }},

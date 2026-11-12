@@ -279,7 +279,7 @@ void panel(ui::Canvas& c, const Panel& p) {
     const float panelH = kPad + titleH + detailH + below + kPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
-    c.draw(Rect{0, 0, W, H, 0, Color::black(0.55f)});
+    c.dim(0.55f);
     c.draw(menuPanel(c.surface(), px, py, panelW, panelH));
     c.spot(spot::kPanel, px, py, panelW, panelH);
 
@@ -413,7 +413,7 @@ void fieldPanel(ui::Canvas& c, const FieldPanel& p) {
     const float px = (W - kW) * 0.5f, py = (H - panelH) * 0.5f;
     // The console blurs what is behind its keyboard. With no blur here, it is the panel every other
     // question is on, so nothing behind shows through.
-    c.draw(Rect{0, 0, W, H, 0, Color::black(0.55f)});
+    c.dim(0.55f);
     c.draw(menuPanel(c.surface(), px, py, kW, panelH));
     c.spot(spot::kPanel, px, py, kW, panelH);
     float y = py + kPad;
