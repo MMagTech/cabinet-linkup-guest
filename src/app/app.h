@@ -193,6 +193,8 @@ private:
     guest::Settings settings_;
     input::Translator input_;
     parts::Hands hands_ = parts::Hands::Mouse;
+    float pointerStill_ = 0.0f;   // since the mouse last moved
+    bool pointerOff_ = false;     // hidden over the game's picture
     bool textOn_ = false;
     float clock_ = 0.0f;
     float still_ = 0.0f;      // since the last key, for the caret

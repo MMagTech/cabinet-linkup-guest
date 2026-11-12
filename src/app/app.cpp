@@ -20,6 +20,7 @@ using Tone = parts::Tone;
 constexpr int kBarCount = 2;            // LinkUp, Settings
 constexpr float kPairingSeconds = 40.0f;
 constexpr float kInvitedSeconds = 6.0f;
+constexpr float kPointerRestSeconds = 2.0f;
 constexpr const char* kCodeLength = "A code has 12 characters";
 constexpr const char* kNotYet = "Not supported yet";
 
@@ -305,6 +306,15 @@ void App::tick(float dt) {
     tickSession(dt);
     sendPad(dt);
     takePicture();
+    // The pointer over the game's picture goes once the mouse rests, as a video player has it, and
+    // comes back at the next move, or when anything is drawn over the picture.
+    pointerStill_ += dt;
+    const bool pointerOff = live() && pointerStill_ >= kPointerRestSeconds;
+    if (pointerOff != pointerOff_) {
+        pointerOff_ = pointerOff;
+        if (pointerOff) SDL_HideCursor();
+        else if (hands_ == parts::Hands::Mouse) SDL_ShowCursor();
+    }
     if (pairingLeft_ > 0.0f) {
         pairingLeft_ -= dt;
         // Nothing came back at all (tickLinkUp).
@@ -503,6 +513,7 @@ void App::handle(const SDL_Event& e) {
             // A move of nothing is the system's, not the person's: a window appearing under the
             // pointer, or the pointer being shown.
             if (e.motion.xrel == 0.0f && e.motion.yrel == 0.0f) return;
+            pointerStill_ = 0.0f;
             float x = 0, y = 0;
             SDL_RenderCoordinatesFromWindow(renderer_, e.motion.x, e.motion.y, &x, &y);
             setHands(parts::Hands::Mouse);
