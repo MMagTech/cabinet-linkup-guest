@@ -3,6 +3,10 @@
 
 #include "game/stream.h"
 
+#ifdef __APPLE__
+#include <VideoToolbox/VideoToolbox.h>
+#endif
+
 #include <cstdio>
 #include <cstring>
 
@@ -20,8 +24,21 @@ bool hasElement(const char* name) {
     return true;
 }
 
-// The computer's own decoder: VideoToolbox on a Mac, which every Mac has for H.264.
-std::string decoder() { return hasElement("vtdec") ? "vtdec" : ""; }
+// The computer's own decoder, its graphics chip's: VideoToolbox on a Mac, Direct3D 11 on Windows,
+// which nearly every Mac and PC has for H.264, and most from about 2016 on for H.265. There is no
+// other: one in software would bring ffmpeg into the app.
+#ifdef _WIN32
+constexpr const char* kDecoder = "d3d11h264dec";
+constexpr const char* kDecoderH265 = "d3d11h265dec";   // there only when the chip decodes H.265
+#else
+constexpr const char* kDecoder = "vtdec";
+constexpr const char* kDecoderH265 = "vtdec";
+#endif
+
+std::string decoderFor(bool h265) {
+    const char* name = h265 ? kDecoderH265 : kDecoder;
+    return hasElement(name) ? name : "";
+}
 
 }  // namespace
 
@@ -77,7 +94,43 @@ void Pictures::clear() {
 
 // ---- The stream ----------------------------------------------------------------
 
-bool Stream::canDecodeH264() { return !decoder().empty(); }
+// stream_friend.cpp's canDecodeH265.
+bool Stream::canDecodeH265() {
+    // For trying the two side by side: TWOPSTART_H264=1 says H.264 only.
+    if (g_getenv("TWOPSTART_H264")) return false;
+#ifdef __APPLE__
+    // VideoToolbox takes H.265 on every Mac, but only the chip's own is fast enough.
+    if (!VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) return false;
+#endif
+    return !decoderFor(true).empty() && hasElement("rtph265depay") && hasElement("h265parse");
+}
+
+std::vector<std::string> Stream::lacking() {
+    // webrtcbin and what it makes inside it: the connection (nice), what locks it (dtls, srtp), the
+    // data channels (sctp), and the packets' order, resends and repairs (rtpmanager, rtp). Then the
+    // picture and the sound, as onPadAdded builds them.
+    static const char* const kParts[] = {
+        "webrtcbin", "nicesrc", "nicesink", "dtlssrtpenc", "dtlssrtpdec", "srtpenc", "srtpdec", "sctpenc",
+        "sctpdec", "rtpbin", "rtpfunnel", "rtprtxreceive", "rtpulpfecdec", "rtpreddec", "rtph264depay",
+        "h264parse", kDecoder, "rtph265depay", "h265parse", "queue", "appsink", "rtpopusdepay", "opusdec",
+        "capsfilter",
+    };
+    std::vector<std::string> out;
+    for (const char* part : kParts)
+        if (!hasElement(part)) out.emplace_back(part);
+    return out;
+}
+
+std::vector<std::string> Stream::unloadable() {
+    std::vector<std::string> out;
+    GList* plugins = gst_registry_get_plugin_list(gst_registry_get());
+    for (GList* p = plugins; p; p = p->next) {
+        GstPlugin* plugin = GST_PLUGIN(p->data);
+        if (GST_OBJECT_FLAG_IS_SET(plugin, GST_PLUGIN_FLAG_BLACKLISTED)) out.emplace_back(gst_plugin_get_name(plugin));
+    }
+    gst_plugin_list_free(plugins);
+    return out;
+}
 
 Stream::Stream(Rtc::Hooks hooks, std::function<void()> askFullPicture, Pictures& pictures)
     : hooks_(std::move(hooks)), askFull_(std::move(askFullPicture)), pictures_(pictures) {}
@@ -140,17 +193,22 @@ void Stream::onPadAdded(GstElement*, GstPad* pad, gpointer self) {
     const gchar* media = gst_structure_get_string(s, "media");
     const gchar* encoding = gst_structure_get_string(s, "encoding-name");
     const bool video = media && std::strcmp(media, "video") == 0;
+    const bool h265 = encoding && std::strcmp(encoding, "H265") == 0;
     std::string description;
     if (video) {
-        const std::string dec = decoder();
-        if (dec.empty() || !encoding || std::strcmp(encoding, "H264") != 0) {
+        guint ssrc = 0;
+        if (gst_structure_get_uint(s, "ssrc", &ssrc)) me->pictureSsrc_ = ssrc;
+        const std::string dec = decoderFor(h265);
+        if (dec.empty() || !encoding || (!h265 && std::strcmp(encoding, "H264") != 0)) {
             std::fprintf(stderr, "[game] no decoder for that picture\n");
             gst_caps_unref(caps);
             return;
         }
-        description = "rtph264depay name=depay request-keyframe=true wait-for-keyframe=true ! h264parse ! " + dec +
-                      " name=dec ! queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream ! "
-                      "appsink name=picture caps=video/x-raw,format=NV12 sync=false max-buffers=1 drop=true";
+        std::fprintf(stderr, "[game] the picture is %s, through %s\n", h265 ? "H.265" : "H.264", dec.c_str());
+        description = std::string(h265 ? "rtph265depay name=depay request-keyframe=true wait-for-keyframe=true ! h265parse ! "
+                                       : "rtph264depay name=depay request-keyframe=true wait-for-keyframe=true ! h264parse ! ") +
+                      dec + " name=dec ! queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream ! "
+                            "appsink name=picture caps=video/x-raw,format=NV12 sync=false max-buffers=1 drop=true";
     } else {
         guint ssrc = 0;
         if (gst_structure_get_uint(s, "ssrc", &ssrc)) me->cushionSound(ssrc);
@@ -221,6 +279,76 @@ void Stream::cushionSound(guint ssrc) {
     g_object_set(it->second, "latency", kSoundCushionMs, "do-lost", TRUE, nullptr);
 }
 
+Stream::Losses Stream::pictureLosses() {
+    Losses out;
+    std::lock_guard<std::mutex> lk(jitterMu_);
+    auto it = jitterbuffers_.find(pictureSsrc_.load());
+    if (it == jitterbuffers_.end()) return out;
+    GstStructure* stats = nullptr;
+    g_object_get(it->second, "stats", &stats, nullptr);
+    if (!stats) return out;
+    gst_structure_get_uint64(stats, "num-pushed", &out.in);
+    gst_structure_get_uint64(stats, "num-lost", &out.lost);
+    gst_structure_get_uint64(stats, "num-late", &out.late);
+    gst_structure_get_uint64(stats, "num-duplicates", &out.duplicates);
+    gst_structure_get_uint64(stats, "rtx-count", &out.resent);
+    gst_structure_get_uint64(stats, "rtx-success-count", &out.resentCame);
+    gst_structure_free(stats);
+    return out;
+}
+
+namespace {
+
+// Whether a description names a resend stream (rtx) for the picture.
+bool namesResends(const GstWebRTCSessionDescription* d) {
+    if (!d || !d->sdp) return false;
+    for (guint i = 0; i < gst_sdp_message_medias_len(d->sdp); ++i) {
+        const GstSDPMedia* m = gst_sdp_message_get_media(d->sdp, i);
+        if (g_strcmp0(gst_sdp_media_get_media(m), "video") != 0) continue;
+        for (guint a = 0;; ++a) {
+            const gchar* v = gst_sdp_media_get_attribute_val_n(m, "rtpmap", a);
+            if (!v) break;
+            if (g_strrstr(v, "rtx/")) return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
+void Stream::sayResends() {
+    if (!webrtc_) return;
+    GstWebRTCSessionDescription *offer = nullptr, *answer = nullptr;
+    g_object_get(webrtc_, "remote-description", &offer, "local-description", &answer, nullptr);
+    std::fprintf(stderr, "[game] resends for the picture: the host %s them, this app %s\n",
+                 namesResends(offer) ? "offers" : "does not offer", namesResends(answer) ? "takes them" : "does not");
+    if (offer) gst_webrtc_session_description_free(offer);
+    if (answer) gst_webrtc_session_description_free(answer);
+}
+
+Stream::Resends Stream::resends() {
+    Resends out;
+    if (!pipeline_) return out;
+    GstIterator* it = gst_bin_iterate_recurse(GST_BIN(pipeline_));
+    GValue item = G_VALUE_INIT;
+    while (gst_iterator_next(it, &item) == GST_ITERATOR_OK) {
+        GstElement* e = GST_ELEMENT(g_value_get_object(&item));
+        GstElementFactory* f = gst_element_get_factory(e);
+        if (f && g_strcmp0(GST_OBJECT_NAME(f), "rtprtxreceive") == 0) {
+            guint asked = 0, came = 0, matched = 0;
+            g_object_get(e, "num-rtx-requests", &asked, "num-rtx-packets", &came, "num-rtx-assoc-packets", &matched, nullptr);
+            out.receiver = true;
+            out.asked += asked;
+            out.came += came;
+            out.matched += matched;
+        }
+        g_value_reset(&item);
+    }
+    g_value_unset(&item);
+    gst_iterator_free(it);
+    return out;
+}
+
 gboolean Stream::onWatchdog(gpointer self) {
     auto* me = static_cast<Stream*>(self);
     const int64_t now = Rtc::nowMs();
@@ -232,6 +360,12 @@ gboolean Stream::onWatchdog(gpointer self) {
         me->lastAskMs_ = now;
         ++me->asks_;
         if (me->askFull_) me->askFull_();
+        // What came before it, to tell a loss on the way from the decoder.
+        const Losses l = me->pictureLosses();
+        std::fprintf(stderr, "[game] at %.1f s, no picture for %lld ms: asked for a full one (%llu picture packets lost so far, "
+                             "%llu late)\n",
+                     static_cast<double>(now - me->startedMs_) / 1000.0, static_cast<long long>(now - picture),
+                     static_cast<unsigned long long>(l.lost), static_cast<unsigned long long>(l.late));
     }
     return G_SOURCE_CONTINUE;
 }
@@ -257,6 +391,7 @@ bool Stream::start(const Rtc::Paths& paths) {
     gst_element_set_state(pipeline_, GST_STATE_PLAYING);
     lastPacketMs_ = 0;
     lastPictureMs_ = Rtc::nowMs();
+    startedMs_ = lastPictureMs_.load();
     watchdog_ = g_timeout_add(20, onWatchdog, this);
     return true;
 }
@@ -266,6 +401,16 @@ void Stream::stop() {
     watchdog_ = 0;
     if (!pipeline_) return;
     std::fprintf(stderr, "[game] %u pictures decoded, asked for a full one %u times\n", decoded_.load(), asks_);
+    const Losses l = pictureLosses();
+    std::fprintf(stderr, "[game] picture packets: %llu in, %llu lost, %llu late, %llu twice, %llu resends asked, %llu came in time\n",
+                 static_cast<unsigned long long>(l.in), static_cast<unsigned long long>(l.lost),
+                 static_cast<unsigned long long>(l.late), static_cast<unsigned long long>(l.duplicates),
+                 static_cast<unsigned long long>(l.resent), static_cast<unsigned long long>(l.resentCame));
+    const Resends r = resends();
+    if (r.receiver)
+        std::fprintf(stderr, "[game] resends: %u asked of the host, %u came at all, %u matched to an ask\n", r.asked, r.came, r.matched);
+    else
+        std::fprintf(stderr, "[game] resends: none can come, there is no resend receiver\n");
     gst_element_set_state(pipeline_, GST_STATE_NULL);
     if (sound_.running()) {
         const SoundQueue::Stats s = sound_.stats();

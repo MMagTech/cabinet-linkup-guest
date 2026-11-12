@@ -237,8 +237,8 @@ void Link::decline(const std::string& invite) {
 
 // cmdJoin. The host's name and key are taken before asking: a sign-in on the way can fetch the list
 // afresh.
-void Link::join(const std::string& invite, bool play) {
-    work([this, invite, play]() {
+void Link::join(const std::string& invite, bool play, bool h265) {
+    work([this, invite, play, h265]() {
         Event e;
         e.kind = Event::Kind::Joined;
         e.invite = invite;
@@ -268,12 +268,12 @@ void Link::join(const std::string& invite, bool play) {
         }
         post(std::move(e));
         if (!playing) return;
-        // sendHello: what this app can decode, and the stream version it speaks. The picture is
-        // H.264 only, which every computer can decode.
+        // sendHello: what this app can decode, and the stream version it speaks. H.264 always; H.265
+        // too where the graphics chip decodes it, and then the host sends that, as to a console.
         json_object* hello = json_object_new_object();
         jsonutil::set(hello, "stream", ServerLink::kStream);
         jsonutil::set(hello, "oldest", ServerLink::kStream);
-        jsonutil::set(hello, "h265", false);
+        jsonutil::set(hello, "h265", h265);
         jsonutil::set(hello, "h264", true);
         json_object* wrap = json_object_new_object();
         json_object_object_add(wrap, "hello", hello);

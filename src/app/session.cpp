@@ -3,6 +3,7 @@
 // words for the screens, a drop, the pause, leaving, the friend's pad, and the picture.
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -22,6 +23,19 @@ constexpr float kPressEverySeconds = 2.0f;
 constexpr float kPadKeepAliveSeconds = 0.1f;
 constexpr Uint32 kRumbleMs = 300;
 
+// What a sensor reads now, in SDL's units and axes (the console's tilt.h): false, with zeros, when the
+// controller has no such sensor or it is off.
+bool readSensor(SDL_Gamepad* pad, SDL_SensorType type, float out[3]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    return pad && SDL_GamepadSensorEnabled(pad, type) && SDL_GetGamepadSensorData(pad, type, out, 3);
+}
+
+// linkuppad::differs: anything but `seq`.
+bool differs(const linkupwire::Pad& a, const linkupwire::Pad& b) {
+    return a.senses != b.senses || a.buttons != b.buttons || std::memcmp(a.axes, b.axes, sizeof a.axes) != 0 ||
+           std::memcmp(a.accel, b.accel, sizeof a.accel) != 0 || std::memcmp(a.gyro, b.gyro, sizeof a.gyro) != 0;
+}
+
 }  // namespace
 
 // ---- What the game says --------------------------------------------------------
@@ -38,7 +52,8 @@ void App::fromGame() {
             case Kind::Peer: {
                 json_object* p = jsonutil::parse(e.text);
                 if (!p) break;
-                fromPeer(jsonutil::str(p, "t"), jsonutil::str(p, "game"));
+                if (jsonutil::str(p, "t") == "place") tookPlace(p);
+                else fromPeer(jsonutil::str(p, "t"), jsonutil::str(p, "game"));
                 json_object_put(p);
                 break;
             }
@@ -100,16 +115,38 @@ void App::fromPeer(const std::string& word, const std::string& game) {
         s.resumes = false;
         if (!s.pausedHere && !s.showsPicture) showWaiting(linkup::waitingFor(s.host), s.game);
     } else if (word == "starting") {
-        // With its name: a session's next game is not the one the invite named.
+        // With its name: a session's next game is not the one the invite named. Where it sits is
+        // said again when it shows.
         if (!game.empty()) s.game = game;
+        s.place.reset();
         showWaiting(linkup::waitingFor(s.host), s.game);
     } else if (word == "quit") {
+        s.place.reset();
         showWaiting(linkup::waitingFor(s.host), "");
     } else if (word == "ended") {
         peerEndedSession();
     } else if (word == "idle") {
         idlePause();
     }
+}
+
+// linkupTookPlace: the host's word on where its game sits, so the bars and the glow around it are
+// drawn here, smooth (ui/glow.h). An older host never says, and the stream's own bars stay.
+void App::tookPlace(json_object* message) {
+    float v[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const char* names[4] = {"x", "y", "w", "h"};
+    for (int i = 0; i < 4; ++i) {
+        json_object* n = nullptr;
+        if (!json_object_object_get_ex(message, names[i], &n)) return;
+        v[i] = static_cast<float>(json_object_get_double(n));
+    }
+    // From the other computer, so kept on its screen whatever it says (LinkUpPlayScreen::setPlace).
+    const float x = std::clamp(v[0], 0.0f, ui::kCanvasWidth), y = std::clamp(v[1], 0.0f, ui::kCanvasHeight);
+    const SDL_FRect place{x, y, std::clamp(v[2], 0.0f, ui::kCanvasWidth - x), std::clamp(v[3], 0.0f, ui::kCanvasHeight - y)};
+    if (place.w <= 0.0f || place.h <= 0.0f) return;
+    if (!session_->place || std::memcmp(&*session_->place, &place, sizeof place) != 0)
+        std::fprintf(stderr, "[game] the host's game sits at %.0f,%.0f, %.0f by %.0f\n", place.x, place.y, place.w, place.h);
+    session_->place = place;
 }
 
 // linkupIdlePause, the friend's side: the host's clock said ten minutes with no press from either.
@@ -158,6 +195,7 @@ void App::peerEndedSession() {
 // linkupSessionClosed: back on the list.
 void App::sessionClosed() {
     if (SDL_Gamepad* pad = playingPad()) SDL_RumbleGamepad(pad, 0, 0, 0);
+    sense(nullptr);
     game_->end(false);
     session_.reset();
     place_ = Place::Friends;
@@ -303,10 +341,12 @@ void App::tickSession(float dt) {
     }
 }
 
-// linkupSendPad: the controller chosen in Settings, to the host, whenever it changes and every tenth of
-// a second. Only presses travel: the keyboard and the mouse stay here. The Guide button never goes:
-// it is this computer's. With another program in front, the pad rests: SDL still reads it there, for
-// the idle rule (main.cpp), but those presses are for that program.
+// linkupSendPad and linkuppad::read: the controller chosen in Settings, to the host, whenever it
+// changes and every tenth of a second: its presses, its sticks, and its tilt, with the motion sensors
+// it has. Only the controller travels: the keyboard and the mouse stay here. The Guide button never
+// goes: it is this computer's. Asleep (something over the picture, or another program in front, where
+// SDL still reads the pad for the idle rule, main.cpp), it is let go and held still: no button,
+// sticks centred, no turning, and tilted as the last state sent had it.
 void App::sendPad(float dt) {
     if (!session_ || place_ != Place::Game || !session_->streamUp) return;
     Session& s = *session_;
@@ -314,20 +354,48 @@ void App::sendPad(float dt) {
     const bool inFront = (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS) != 0;
     const bool asleep = !pictureBehind() || overlay_.kind != Overlay::Kind::None || !inFront;
     SDL_Gamepad* gp = playingPad();
+    sense(gp);
+    float accel[3], gyro[3];
+    const bool hasAccel = readSensor(gp, SDL_SENSOR_ACCEL, accel);
+    const bool hasGyro = readSensor(gp, SDL_SENSOR_GYRO, gyro);
+    pad.senses = static_cast<uint8_t>((hasAccel ? linkupwire::kSenseAccel : 0) | (hasGyro ? linkupwire::kSenseGyro : 0));
     if (gp && !asleep) {
         for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
             if (b == SDL_GAMEPAD_BUTTON_GUIDE) continue;
             if (SDL_GetGamepadButton(gp, static_cast<SDL_GamepadButton>(b))) pad.buttons |= 1u << b;
         }
         for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) pad.axes[a] = SDL_GetGamepadAxis(gp, static_cast<SDL_GamepadAxis>(a));
+        std::memcpy(pad.accel, accel, sizeof pad.accel);
+        std::memcpy(pad.gyro, gyro, sizeof pad.gyro);
+    } else if (hasAccel) {
+        const bool held = (s.sent.senses & linkupwire::kSenseAccel) != 0;
+        std::memcpy(pad.accel, held ? s.sent.accel : accel, sizeof pad.accel);
     }
     s.padAge += dt;
-    const bool changed = pad.buttons != s.sent.buttons || std::memcmp(pad.axes, s.sent.axes, sizeof pad.axes) != 0;
-    if (!changed && s.padAge < kPadKeepAliveSeconds) return;
+    if (!differs(pad, s.sent) && s.padAge < kPadKeepAliveSeconds) return;
     s.padAge = 0.0f;
     pad.seq = ++s.seq;
     s.sent = pad;
     game_->pad(pad);
+}
+
+// linkuppad::senseHere: the playing controller's accelerometer and gyroscope on while a game's stream
+// is up, and off after it, or when another controller plays.
+void App::sense(SDL_Gamepad* pad) {
+    if (pad == sensing_) return;
+    for (const bool on : {false, true}) {
+        SDL_Gamepad* which = on ? pad : sensing_;
+        if (!which) continue;
+        SDL_SetGamepadSensorEnabled(which, SDL_SENSOR_ACCEL, on);
+        SDL_SetGamepadSensorEnabled(which, SDL_SENSOR_GYRO, on);
+    }
+    sensing_ = pad;
+    if (pad) {
+        const bool accel = SDL_GamepadHasSensor(pad, SDL_SENSOR_ACCEL), gyro = SDL_GamepadHasSensor(pad, SDL_SENSOR_GYRO);
+        const char* name = SDL_GetGamepadName(pad);
+        std::fprintf(stderr, "[game] %s plays, with %s\n", name ? name : "a controller",
+                     accel && gyro ? "an accelerometer and a gyroscope" : accel ? "an accelerometer" : gyro ? "a gyroscope" : "no motion sensors");
+    }
 }
 
 SDL_Gamepad* App::playingPad() const {
@@ -372,7 +440,11 @@ void App::takePicture() {
     });
 }
 
-// The host's picture, as large as the window allows, its shape kept, black around it.
+// The host's game, as large as the window allows, its shape kept. Where the host said its game sits,
+// that is what is fitted, not the host's whole screen, so a game narrower than a TV fills a taller
+// window's height, and its bars are cut where the window ends; around it, to the window's edges, the
+// bars and the glow are drawn here (ui/glow.h). With no word from the host, its whole screen, with
+// black around it.
 void App::drawPicture() {
     if (!picture_) return;
     int ow = 0, oh = 0;
@@ -380,7 +452,15 @@ void App::drawPicture() {
     float w = 0, h = 0;
     SDL_GetTextureSize(picture_, &w, &h);
     if (w <= 0 || h <= 0 || ow <= 0 || oh <= 0) return;
-    const float scale = std::min(static_cast<float>(ow) / w, static_cast<float>(oh) / h);
-    SDL_FRect at{(static_cast<float>(ow) - w * scale) * 0.5f, (static_cast<float>(oh) - h * scale) * 0.5f, w * scale, h * scale};
+    const std::optional<SDL_FRect>& place = session_ ? session_->place : std::nullopt;
+    const float kx = w / ui::kCanvasWidth, ky = h / ui::kCanvasHeight;
+    const SDL_FRect game = place ? SDL_FRect{place->x * kx, place->y * ky, place->w * kx, place->h * ky} : SDL_FRect{0, 0, w, h};
+    const float fw = static_cast<float>(ow), fh = static_cast<float>(oh);
+    const float scale = std::min(fw / game.w, fh / game.h);
+    const SDL_FRect at{fw * 0.5f - (game.x + game.w * 0.5f) * scale, fh * 0.5f - (game.y + game.h * 0.5f) * scale, w * scale,
+                       h * scale};
     SDL_RenderTexture(renderer_, picture_, nullptr, &at);
+    if (place)
+        canvas_.glow(SDL_FRect{0, 0, fw, fh},
+                     SDL_FRect{at.x + game.x * scale, at.y + game.y * scale, game.w * scale, game.h * scale});
 }

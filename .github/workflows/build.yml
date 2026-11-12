@@ -146,6 +146,7 @@ jobs:
           "$root\bin" >> $env:GITHUB_PATH
           "GStreamer is at $root"
           Get-ChildItem "$root\lib", "$root\bin" -Filter *crypto* | Select-Object -ExpandProperty FullName
+          Get-ChildItem "$root\bin" -Filter pkg-config* | Select-Object -ExpandProperty FullName
           "Visual Studio here:"
           & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -prerelease -format value -property displayName
 
@@ -174,3 +175,24 @@ jobs:
           name: screens-windows
           path: build/shots
           if-no-files-found: ignore
+
+      # The app as a friend gets it: a folder that runs on a PC with nothing installed (CMakeLists.txt,
+      # "The Windows zip"), tried unpacked with nothing else of GStreamer's there.
+      - name: The zip
+        shell: pwsh
+        run: |
+          cmake --install build --config Release --prefix "dist\2P Start"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path "dist\2P Start" -DestinationPath dist\2pstart-windows.zip
+          $files = Get-ChildItem "dist\2P Start" -Recurse -File
+          "{0} files, {1:N1} MB, {2:N1} MB zipped" -f $files.Count, (($files | Measure-Object Length -Sum).Sum / 1MB), ((Get-Item dist\2pstart-windows.zip).Length / 1MB)
+          $files | ForEach-Object { $_.FullName.Substring((Resolve-Path "dist\2P Start").Path.Length + 1) }
+      - name: The zip, on its own
+        shell: pwsh
+        run: ci/check-zip.ps1 dist\2pstart-windows.zip
+      - name: The zip, kept
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: 2pstart-windows
+          path: dist/2P Start
+          if-no-files-found: error

@@ -59,7 +59,9 @@ struct FirstRunView {
 };
 void drawFirstRun(ui::Canvas& c, const FirstRunView& v);
 
-// Settings: what a friend can change. The colours are the console's own.
+// Settings: what a friend can change, laid out as the console's Settings: its categories down the
+// left, the chosen one's rows on the right (settings.cpp, design.h's settingsListX and
+// settingsPaneX). The colours are the console's own.
 struct SettingsView {
     std::string name;          // as friends see you
     bool typingName = false;   // the name is being typed: a caret in it
@@ -68,27 +70,29 @@ struct SettingsView {
     int colour = 0;            // one of look's sixteen
     bool fullScreen = true;
     bool startup = false;      // the app opens at login, with no window
+    int sounds = 2;            // Interface sounds: Off, Quiet, Medium or Loud (the console's sound.h)
     std::vector<std::string> controllers;   // the ones connected, by name
     int controller = 0;                     // which of them plays
     // Its address, as the console's row shows it. Pressed, the row opens Change server and Leave.
     std::string server;
-    int focus = 0;
+    std::string version;       // About's first row, only read
+    int category = 0;          // whose rows are on the right
+    int focus = -1;            // one of its rows, by its place there; -1, the category list
     bool barFocused = false;
 };
-// The rows, in order: what `focus` counts.
+// Every row, wherever it sits.
 namespace setting {
-enum Row : int { Name, Colour, FullScreen, Startup, Controller, Server, About, Count };
+enum Row : int { Name, Server, Controller, Colour, FullScreen, Sounds, Startup, Version, HowTo, Credits, Count };
 }
-void drawSettings(ui::Canvas& c, const SettingsView& v);
-
-// About, as the console's Settings has it: the version, How to, and Credits and licenses. A list
-// over Settings; `focus` is a line.
-struct AboutView {
-    std::string version;
-    int focus = 0;
+// The categories, in order, and their rows in order.
+struct SettingsCategory {
+    const char* name;
+    std::vector<setting::Row> rows;
 };
-parts::Panel aboutPanel(const AboutView& v);
-void drawAbout(ui::Canvas& c, const AboutView& v);
+const std::vector<SettingsCategory>& settingsCategories();
+// Whether a row takes focus: Version is only read.
+bool settingFocusable(setting::Row row);
+void drawSettings(ui::Canvas& c, const SettingsView& v);
 
 // Credits and licenses: a list over Settings, one line for each project whose work is in the app,
 // what it does and its licence (credits.h). `focus` is a line, `top` the first shown.

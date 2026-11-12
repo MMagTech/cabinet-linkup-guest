@@ -115,17 +115,25 @@ parts::Panel said(const std::string& title, const char* after, parts::Hands hand
     return p;
 }
 
-screens::SettingsView settingsOf(look::Colour colour, int focus) {
+// The Settings categories, by their place on the left.
+enum Category { kLinkUp, kControllers, kDisplay, kSystem, kAbout };
+
+// Settings with `category` chosen, and the focus on its row at `focus`, or on the list with -1.
+screens::SettingsView settingsOf(look::Colour colour, int category, int focus) {
     screens::SettingsView v;
     v.name = "alex";
     v.colour = static_cast<int>(colour);
     v.controllers = {"Xbox Wireless Controller"};
     v.server = kAddress;
+    v.version = TWOPSTART_VERSION;
+    v.category = category;
     v.focus = focus;
     return v;
 }
 
-void settings(ui::Canvas& c, look::Colour colour, int focus) { screens::drawSettings(c, settingsOf(colour, focus)); }
+void settings(ui::Canvas& c, look::Colour colour, int category, int focus) {
+    screens::drawSettings(c, settingsOf(colour, category, focus));
+}
 
 std::vector<Scene> scenes() {
     using parts::Tone;
@@ -154,6 +162,15 @@ std::vector<Scene> scenes() {
          }},
         {"09-waiting", "Waiting for the host", [](ui::Canvas& c, float t) { waiting(c, t, linkup::waitingFor(kHost), kGame); }},
         {"10-game", "The game", [](ui::Canvas& c, float t) { screens::drawPictureStandIn(c, kGame, t); }},
+        // A game narrower than the screen, where the host said where it sits: the bars and the glow
+        // drawn here, over the stream's own (ui/glow.h).
+        {"10a-game-bars", "The game, its bars and glow drawn here",
+         [](ui::Canvas& c, float t) {
+             screens::drawPictureStandIn(c, kGame, t);
+             const SDL_FRect screen = c.onOutput();
+             const float k = screen.w / ui::kCanvasWidth;
+             c.glow(screen, SDL_FRect{screen.x + 240.0f * k, screen.y, 1440.0f * k, screen.h});
+         }},
         {"11-host-paused", "The host paused",
          [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame); }},
         {"12-paused-here", "You paused",
@@ -200,17 +217,19 @@ std::vector<Scene> scenes() {
              friends(c, oneFriend(Status::Online));
              parts::notice(c, "Connect a controller to play", Tone::Problem);
          }},
-        {"25-settings", "Settings", [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, 1); }},
+        {"25-settings", "Settings", [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, kLinkUp, -1); }},
         {"25a-settings-startup", "Settings, Startup on",
          [](ui::Canvas& c, float) {
-             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Startup);
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kSystem, 0);
              v.startup = true;
              screens::drawSettings(c, v);
          }},
+        {"25b-settings-display", "Settings, Display and Sound",
+         [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, kDisplay, 0); }},
         {"26-colour-teal", "Settings, in Teal",
          [](ui::Canvas& c, float) {
              c.setLook(look::of(look::Colour::Teal));
-             settings(c, look::Colour::Teal, 1);
+             settings(c, look::Colour::Teal, kDisplay, 0);
          }},
         {"27-colour-sunset", "The list, in Sunset",
          [](ui::Canvas& c, float) {
@@ -280,7 +299,7 @@ std::vector<Scene> scenes() {
          }},
         {"36-settings-name", "Settings, typing a new name",
          [](ui::Canvas& c, float t) {
-             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Name);
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kLinkUp, 0);
              v.name = "alex_on_pc";
              v.typingName = true;
              v.still = t;
@@ -288,7 +307,7 @@ std::vector<Scene> scenes() {
          }},
         {"36a-settings-name-caret", "Settings, the caret inside the name",
          [](ui::Canvas& c, float t) {
-             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Name);
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kLinkUp, 0);
              v.name = "alex_on_pc";
              v.typingName = true;
              v.caret = 4;   // after "alex"
@@ -297,43 +316,37 @@ std::vector<Scene> scenes() {
          }},
         {"37-settings-controller", "Settings, two controllers",
          [](ui::Canvas& c, float) {
-             screens::SettingsView v = settingsOf(look::Colour::Purple, screens::setting::Controller);
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kControllers, 0);
              v.controllers = {"Xbox Wireless Controller", "DualSense Wireless Controller"};
              screens::drawSettings(c, v);
          }},
         {"38-settings-server", "Settings, the server",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::Server);
+             settings(c, look::Colour::Purple, kLinkUp, 1);
              parts::panel(c, question(kAddress, "", {"Change server", "Leave"}, 0));
          }},
         {"39-credits", "Credits and licenses",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::About);
+             settings(c, look::Colour::Purple, kAbout, 2);
              screens::drawCredits(c, screens::CreditsView{});
          }},
         {"40-credits-end", "Credits and licenses, at the end",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::About);
+             settings(c, look::Colour::Purple, kAbout, 2);
              screens::CreditsView v;
              v.focus = screens::creditCount() - 1;
              v.top = screens::creditCount() - parts::kPanelRows;
              screens::drawCredits(c, v);
          }},
-        {"44-about", "About",
-         [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::About);
-             screens::AboutView v;
-             v.version = TWOPSTART_VERSION;
-             screens::drawAbout(c, v);
-         }},
+        {"44-about", "About", [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, kAbout, -1); }},
         {"41-settings-leave", "Settings, leaving the server",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::Server);
+             settings(c, look::Colour::Purple, kLinkUp, 1);
              parts::panel(c, question(std::string("Leave ") + kAddress + "?", "", {"Leave", "Cancel"}, 1));
          }},
         {"42-change-server", "Change server: its address",
          [](ui::Canvas& c, float t) {
-             settings(c, look::Colour::Purple, screens::setting::Server);
+             settings(c, look::Colour::Purple, kLinkUp, 1);
              parts::FieldPanel p;
              p.title = "Server address";
              p.value = "linkup.example.org:79";
@@ -344,7 +357,7 @@ std::vector<Scene> scenes() {
          }},
         {"42a-change-server-long", "Change server: a long address, the caret inside it",
          [](ui::Canvas& c, float t) {
-             settings(c, look::Colour::Purple, screens::setting::Server);
+             settings(c, look::Colour::Purple, kLinkUp, 1);
              parts::FieldPanel p;
              p.title = "Server address";
              p.value = "cabinet-linkup.friday-games-night.riley-and-sam.example.org:7845";
@@ -356,7 +369,7 @@ std::vector<Scene> scenes() {
          }},
         {"43-change-server-code", "Change server: another server's code",
          [](ui::Canvas& c, float t) {
-             settings(c, look::Colour::Purple, screens::setting::Server);
+             settings(c, look::Colour::Purple, kLinkUp, 1);
              parts::FieldPanel p;
              p.title = "Code";
              p.hint = "linkup.example.org:7945";
@@ -385,7 +398,7 @@ std::vector<Scene> scenes() {
          }},
         {"48-how-to", "How to",
          [](ui::Canvas& c, float) {
-             settings(c, look::Colour::Purple, screens::setting::About);
+             settings(c, look::Colour::Purple, kAbout, 1);
              screens::drawHowTo(c, screens::HowToView{});
          }},
     };

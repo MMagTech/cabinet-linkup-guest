@@ -9,9 +9,11 @@
 // a missing piece before Opus fills it in, the one-picture queue before the picture leaves, and the
 // watchdog asking the host for a full picture while packets arrive and no picture comes out.
 //
-// WHAT IS THIS APP'S: the decoder is the computer's own, VideoToolbox on a Mac, and the picture is
-// kept in memory, the newest only, for the window to draw (Pictures). The colours are BT.601 limited
-// range, as the console states after its decoder; the window's texture says so (app.cpp).
+// WHAT IS THIS APP'S: the decoder is the computer's own, VideoToolbox on a Mac and Direct3D 11 on
+// Windows, for H.265 where the chip has it and H.264 otherwise, as the host is told in the hello
+// (link.cpp); and the picture is kept in memory, the newest only, for the window to draw (Pictures).
+// The colours are BT.601 limited range, as the console states after its decoder; the window's
+// texture says so (app.cpp).
 
 #pragma once
 
@@ -27,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "game/game.h"
 #include "game/sound.h"
@@ -61,15 +64,36 @@ public:
     bool start(const Rtc::Paths& paths);
     void stop();
     Rtc* rtc() { return rtc_.get(); }
+    // Says in the log whether the host offered resends for the picture, and whether this app took
+    // them, once the two have agreed how to talk.
+    void sayResends();
 
-    // Whether this computer can decode the host's picture: H.264, with a decoder GStreamer has.
-    static bool canDecodeH264();
+    // What a stream needs that GStreamer does not have, by name: empty when it can play. The decoder
+    // is among them, so a computer that cannot decode H.264 in its graphics chip lacks it.
+    static std::vector<std::string> lacking();
+    // Whether it can decode H.265 too, in the graphics chip (stream_friend.cpp's canDecodeH265).
+    static bool canDecodeH265();
+    // GStreamer's plugins that are there but would not load, most likely for a library they need
+    // that is not there.
+    static std::vector<std::string> unloadable();
 
 private:
     static void onPadAdded(GstElement*, GstPad* pad, gpointer self);
     static void onNewTransceiver(GstElement*, GstWebRTCRTPTransceiver* t, gpointer self);
     static void onNewJitterbuffer(GstElement*, GstElement* jitterbuffer, guint session, guint ssrc, gpointer self);
     void cushionSound(guint ssrc);
+    // The picture's jitter buffer's count: packets in, lost for good, come too late, and resends
+    // asked for and those that came.
+    struct Losses {
+        guint64 in = 0, lost = 0, late = 0, duplicates = 0, resent = 0, resentCame = 0;
+    };
+    Losses pictureLosses();
+    // Resent packets that arrived at all, from webrtcbin's resend receivers, and whether there are any.
+    struct Resends {
+        bool receiver = false;
+        guint asked = 0, came = 0, matched = 0;
+    };
+    Resends resends();
     static gboolean onBus(GstBus*, GstMessage* m, gpointer self);
     static GstPadProbeReturn onPacket(GstPad*, GstPadProbeInfo*, gpointer self);
     static GstPadProbeReturn onPicture(GstPad*, GstPadProbeInfo*, gpointer self);
@@ -90,6 +114,8 @@ private:
     std::atomic<int64_t> lastPacketMs_{0};
     std::atomic<int64_t> lastPictureMs_{0};
     int64_t lastAskMs_ = 0;
+    int64_t startedMs_ = 0;
+    std::atomic<guint> pictureSsrc_{0};
     std::atomic<uint32_t> decoded_{0};
     uint32_t asks_ = 0;
     Sound sound_;

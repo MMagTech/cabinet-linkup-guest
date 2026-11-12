@@ -8,6 +8,7 @@
 #include <iterator>
 
 #include "screens/credits.h"
+#include "sound.h"
 #include "ui/look.h"
 #include "ui/parts.h"
 
@@ -308,55 +309,132 @@ void drawFirstRun(ui::Canvas& c, const FirstRunView& v) {
     }
 }
 
+const std::vector<SettingsCategory>& settingsCategories() {
+    static const std::vector<SettingsCategory> kCategories = {
+        {"LinkUp", {setting::Name, setting::Server}},
+        {"Controllers", {setting::Controller}},
+        {"Display and Sound", {setting::Colour, setting::FullScreen, setting::Sounds}},
+        {"System", {setting::Startup}},
+        {"About", {setting::Version, setting::HowTo, setting::Credits}},
+    };
+    return kCategories;
+}
+
+bool settingFocusable(setting::Row row) { return row != setting::Version; }
+
+namespace {
+
+// The console's two columns (design.h): the list at the content inset less half a row's padding,
+// 420 wide, each name in Title3 with 16 above and below and 8 between; the rows 60 after it, up to
+// 1100 wide, 16 apart (kDetailRowGap).
+constexpr float kListX = parts::kInset - 16.0f;
+constexpr float kListWidth = 420.0f;
+constexpr float kListPadY = 16.0f;
+constexpr float kListGap = 8.0f;
+constexpr float kPaneGap = 60.0f;
+constexpr float kPaneMaxWidth = 1100.0f;
+constexpr float kPaneRowGap = 16.0f;
+constexpr float kListRadius = 16.0f;
+constexpr float kFocusScale = 1.03f;
+constexpr float kSelectedTint = 0.30f;
+constexpr float kFocusedTint = 0.55f;
+
+parts::Row settingRow(setting::Row id, const SettingsView& v) {
+    switch (id) {
+        case setting::Name: {
+            parts::Row r{"Username", v.name};
+            r.typing = v.typingName;
+            r.caret = v.caret;
+            r.line = parts::spot::kItem + setting::Name;
+            return r;
+        }
+        case setting::Server: {
+            parts::Row r{"Server", v.server};
+            r.opens = true;
+            return r;
+        }
+        case setting::Controller: {
+            const int pads = static_cast<int>(v.controllers.size());
+            const int pad = std::clamp(v.controller, 0, std::max(0, pads - 1));
+            parts::Row r{"Controller", pads == 0 ? "None connected" : v.controllers[static_cast<size_t>(pad)]};
+            r.choice = pads > 1;
+            r.canLeft = pad > 0;
+            r.canRight = pad + 1 < pads;
+            return r;
+        }
+        case setting::Colour: {
+            const int colour = std::clamp(v.colour, 0, look::kColourCount - 1);
+            parts::Row r{"Color", look::colourName(static_cast<look::Colour>(colour))};
+            r.choice = true;
+            r.canLeft = colour > 0;
+            r.canRight = colour + 1 < look::kColourCount;
+            return r;
+        }
+        case setting::FullScreen: return {"Full screen", v.fullScreen ? "On" : "Off"};
+        case setting::Sounds: {
+            const int level = std::clamp(v.sounds, 0, sound::kLevelCount - 1);
+            parts::Row r{"Interface sounds", sound::levelName(static_cast<sound::Level>(level))};
+            r.choice = true;
+            r.canLeft = level > 0;
+            r.canRight = level + 1 < sound::kLevelCount;
+            return r;
+        }
+        case setting::Startup: return {"Startup", v.startup ? "On" : "Off"};
+        case setting::Version: return {"Version", v.version};
+        case setting::HowTo: {
+            parts::Row r{"How to", ""};
+            r.opens = true;
+            return r;
+        }
+        case setting::Credits: {
+            parts::Row r{"Credits and licenses", ""};
+            r.opens = true;
+            return r;
+        }
+        default: return {};
+    }
+}
+
+}  // namespace
+
 void drawSettings(ui::Canvas& c, const SettingsView& v) {
     c.backdrop();
     drawBar(c, Bar::Settings, v.barFocused);
-    constexpr float kW = 900.0f;
-    const float pitch = parts::kRowHeight + parts::kRowGap;
-    const auto line = [&](int i, parts::Row r) {
+    const std::vector<SettingsCategory>& cats = settingsCategories();
+    const int cat = std::clamp(v.category, 0, static_cast<int>(cats.size()) - 1);
+
+    // The categories. Selection is not focus, and both show at once: the one whose rows are on the
+    // right is full white, with a quiet ground under it while its rows have the focus; the one the
+    // focus is on has the focused tint and grows a little.
+    const float itemH = c.lineHeight(TextStyle::Title3) + kListPadY * 2.0f;
+    float y = parts::kContentTop;
+    for (int i = 0; i < static_cast<int>(cats.size()); ++i) {
+        const bool selected = i == cat;
+        const bool focused = selected && v.focus < 0 && !v.barFocused;
+        const float s = focused ? kFocusScale : 1.0f;
+        const float w = kListWidth * s, h = itemH * s;
+        const float x = kListX - (w - kListWidth) * 0.5f, iy = y - (h - itemH) * 0.5f;
+        if (focused) c.draw(Rect{x, iy, w, h, kListRadius, Color::white(kFocusedTint)});
+        else if (selected && !v.barFocused) c.draw(Rect{x, iy, w, h, kListRadius, Color::white(kSelectedTint * 0.6f)});
+        c.text(cats[static_cast<size_t>(i)].name, parts::kInset, iy + kListPadY * s + c.ascent(TextStyle::Title3),
+               TextStyle::Title3, Color::white(selected ? 1.0f : 0.60f));
+        c.spot(parts::spot::kCategory + i, kListX, y, kListWidth, itemH);
+        y += itemH + kListGap;
+    }
+
+    // The chosen category's rows.
+    const float paneX = kListX + kListWidth + kPaneGap;
+    const float paneW = std::min(kPaneMaxWidth, ui::kCanvasWidth - parts::kInset - paneX);
+    const std::vector<setting::Row>& rows = cats[static_cast<size_t>(cat)].rows;
+    for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+        const setting::Row id = rows[static_cast<size_t>(i)];
+        parts::Row r = settingRow(id, v);
         r.still = v.still;
-        const float y = parts::kContentTop + static_cast<float>(i) * pitch;
-        parts::row(c, parts::kInset, y, kW, r, v.focus == i && !v.barFocused ? 1.0f : 0.0f);
-        c.spot(parts::spot::kItem + i, parts::kInset, y, kW, parts::kRowHeight);
-    };
-    parts::Row name{"Username", v.name};
-    name.typing = v.typingName;
-    name.caret = v.caret;
-    name.line = parts::spot::kItem + setting::Name;
-    line(setting::Name, name);
-    const int colour = std::clamp(v.colour, 0, look::kColourCount - 1);
-    parts::Row colourRow{"Color", look::colourName(static_cast<look::Colour>(colour))};
-    colourRow.choice = true;
-    colourRow.canLeft = colour > 0;
-    colourRow.canRight = colour + 1 < look::kColourCount;
-    line(setting::Colour, colourRow);
-    line(setting::FullScreen, {"Full screen", v.fullScreen ? "On" : "Off"});
-    line(setting::Startup, {"Startup", v.startup ? "On" : "Off"});
-    const int pads = static_cast<int>(v.controllers.size());
-    const int pad = std::clamp(v.controller, 0, std::max(0, pads - 1));
-    parts::Row controller{"Controller", pads == 0 ? "None connected" : v.controllers[static_cast<size_t>(pad)]};
-    controller.choice = pads > 1;
-    controller.canLeft = pad > 0;
-    controller.canRight = pad + 1 < pads;
-    line(setting::Controller, controller);
-    parts::Row server{"Server", v.server};
-    server.opens = true;
-    line(setting::Server, server);
-    parts::Row about{"About", ""};
-    about.opens = true;
-    line(setting::About, about);
+        const float ry = parts::kContentTop + static_cast<float>(i) * (parts::kRowHeight + kPaneRowGap);
+        parts::row(c, paneX, ry, paneW, r, v.focus == i && !v.barFocused ? 1.0f : 0.0f);
+        if (settingFocusable(id)) c.spot(parts::spot::kItem + id, paneX, ry, paneW, parts::kRowHeight);
+    }
 }
-
-parts::Panel aboutPanel(const AboutView& v) {
-    parts::Panel p;
-    p.title = "About";
-    p.options = {"Version", "How to", "Credits and licenses"};
-    p.values = {v.version, "", ""};
-    p.focused = v.focus;
-    return p;
-}
-
-void drawAbout(ui::Canvas& c, const AboutView& v) { parts::panel(c, aboutPanel(v)); }
 
 // The console's How to (about.cpp): the pause and the leaving, as a friend has them (the friend's
 // pause offers Leave where the console's offers Exit to Home), and what the menus need.

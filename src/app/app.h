@@ -17,6 +17,8 @@
 
 #include <SDL3/SDL.h>
 
+struct json_object;
+
 #include "app/idle.h"
 #include "app/input.h"
 #include "app/notice.h"
@@ -61,7 +63,8 @@ public:
 
     // For the tray (tray.h). An invite heard while nobody may be looking goes to `onInvite` too: who,
     // the console's line for it, and the game.
-    void tellInvites(std::function<void(const std::string&, const std::string&, const std::string&)> onInvite);
+    // Told of each invite: true when the system said it, with a notification of its own.
+    void tellInvites(std::function<bool(const std::string&, const std::string&, const std::string&)> onInvite);
     // Join or Decline for this friend's invite, as pressing their tile opens it. Nothing when it ended.
     void answerFrom(const std::string& who);
     std::string statusLine() const;
@@ -107,9 +110,11 @@ private:
     void fromGame();
     void tickSession(float dt);
     void sendPad(float dt);
+    void sense(SDL_Gamepad* pad);
     bool takeGameEvent(const SDL_Event& e);
     void moveInGame(moves::Move m);
     void fromPeer(const std::string& word, const std::string& game);
+    void tookPlace(json_object* message);
     void connected();
     void connectFailed(const std::string& reason);
     void friendPicture(bool on);
@@ -135,8 +140,9 @@ private:
     void moveOnFirstRun(moves::Move m);
     void moveOnOverlay(moves::Move m);
     void pressFriend();
+    screens::setting::Row settingAtFocus() const;
     void pressSetting(int row);
-    void stepSetting(int row, int by);
+    bool stepSetting(int row, int by);
     void switchTo(Place place);
     bool screenTakesFocus() const;
     int tileCount() const;
@@ -165,7 +171,6 @@ private:
     void join(const linkup::Friend& f);
     void decline(const linkup::Friend& f);
     void serverPanel();
-    void aboutPanel(int focus);
     void askAddress();
     void askCode(const std::string& address);
     void leave();
@@ -193,6 +198,8 @@ private:
     guest::Settings settings_;
     input::Translator input_;
     parts::Hands hands_ = parts::Hands::Mouse;
+    float pointerStill_ = 0.0f;   // since the mouse last moved
+    bool pointerOff_ = false;     // hidden over the game's picture
     bool textOn_ = false;
     float clock_ = 0.0f;
     float still_ = 0.0f;      // since the last key, for the caret
@@ -215,7 +222,8 @@ private:
     bool changing_ = false;      // Change server's pairing, from Settings
 
     std::string name_;           // as friends see this one, kept beside the key
-    int settingsFocus_ = 0;
+    int settingsCategory_ = 0;   // whose rows show
+    int settingsRow_ = -1;       // the focused row, by its place in them; -1, the category list
     bool typingName_ = false;
     std::string typedName_;
 
@@ -238,6 +246,9 @@ private:
         std::string title;            // what Waiting and Reconnecting say
         std::string under;            // the game, under it
         bool resumes = false;         // the host paused, and either can resume
+        // Where the host's game sits on its screen, in canvas points, as it last said (#692): the
+        // bars and the glow around it are drawn here. None from an older host.
+        std::optional<SDL_FRect> place;
         linkupwire::Pad sent;
         uint16_t seq = 0;
         float padAge = 0.0f;
@@ -253,9 +264,10 @@ private:
 
     std::vector<SDL_JoystickID> padIds_;
     std::map<SDL_JoystickID, SDL_Gamepad*> pads_;
+    SDL_Gamepad* sensing_ = nullptr;   // the controller whose tilt is on, for a game
 
     // Nobody at the computer: Offline to friends, as a console left alone (idle.h).
     idle::Watch idle_;
     bool away_ = false;
-    std::function<void(const std::string&, const std::string&, const std::string&)> onInvite_;
+    std::function<bool(const std::string&, const std::string&, const std::string&)> onInvite_;
 };

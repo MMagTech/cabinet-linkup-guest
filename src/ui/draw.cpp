@@ -98,7 +98,7 @@ struct Mesh {
 
 }  // namespace
 
-Canvas::Canvas(SDL_Renderer* renderer, const std::string& fonts) : renderer_(renderer), fonts_(fonts) {
+Canvas::Canvas(SDL_Renderer* renderer, const std::string& fonts) : renderer_(renderer), glow_(renderer), fonts_(fonts) {
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     ready_ = TTF_Init();
     setOutput(static_cast<int>(kCanvasWidth), static_cast<int>(kCanvasHeight));
@@ -147,6 +147,11 @@ void Canvas::backdrop(float alpha) {
                              {{w, mid}, middle, {0, 0}}, {{0, h}, bottom, {0, 0}}, {{w, h}, bottom, {0, 0}}};
     const int at[12] = {0, 1, 3, 0, 3, 2, 2, 3, 5, 2, 5, 4};
     SDL_RenderGeometry(renderer_, nullptr, v, 6, at, 12);
+}
+
+void Canvas::dim(float alpha) {
+    SDL_SetRenderDrawColorFloat(renderer_, 0.0f, 0.0f, 0.0f, alpha * alpha_);
+    SDL_RenderFillRect(renderer_, nullptr);
 }
 
 void Canvas::draw(const Rect& r) {

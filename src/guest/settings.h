@@ -15,6 +15,7 @@ struct Settings {
     bool appearOffline = false;
     bool startup = false;             // opens at login, with no window (app/startup.h)
     bool saidTray = false;            // Windows said once that the X keeps it running in the tray
+    std::string sounds = "medium";    // Interface sounds, by the console's word: off, quiet, medium, loud
 };
 
 // What is kept, or the defaults for anything missing or unreadable.

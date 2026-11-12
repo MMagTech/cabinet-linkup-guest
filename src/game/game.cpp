@@ -3,20 +3,18 @@
 
 #include "game/game.h"
 
-#include <fcntl.h>
-#include <netdb.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <gio/gio.h>
 
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <thread>
 
+#include <SDL3/SDL.h>
 #include <json-c/json.h>
 #include <openssl/rand.h>
 
@@ -38,46 +36,65 @@ constexpr int64_t kBeatMs = 250;
 constexpr int64_t kDropMs = 2000;
 constexpr int64_t kConnectLimitMs = 30000;
 
-bool hasElement(const char* name) {
-    GstElementFactory* f = gst_element_factory_find(name);
-    if (!f) return false;
-    gst_object_unref(f);
-    return true;
+// A copy of the app with GStreamer beside it, as the Windows zip has it: its own plugins and no
+// others from elsewhere on the computer, kept in a registry of their own. Elsewhere, and in a build
+// on the computer it was built on, GStreamer is the one installed.
+void useGStreamerBeside() {
+#ifdef _WIN32
+    const char* base = SDL_GetBasePath();
+    if (!base) return;
+    const std::string plugins = std::string(base) + "lib\\gstreamer-1.0";
+    if (!g_file_test(plugins.c_str(), G_FILE_TEST_IS_DIR)) return;
+    g_setenv("GST_PLUGIN_SYSTEM_PATH_1_0", plugins.c_str(), TRUE);
+    g_unsetenv("GST_PLUGIN_PATH_1_0");
+    g_unsetenv("GST_PLUGIN_PATH");
+    // Read in the app itself, which has no helper beside it for that.
+    g_setenv("GST_REGISTRY_FORK", "no", TRUE);
+    const std::string registry = std::string(g_get_user_cache_dir()) + "\\gstreamer-1.0\\cabinetos-2p-start.bin";
+    g_setenv("GST_REGISTRY_1_0", registry.c_str(), TRUE);
+#endif
 }
 
 // firstStunThatAnswers: the first STUN server that answers, in the order the owner set. webrtcbin
-// takes one. A binding request with half a second for each, on a thread of its own.
+// takes one. A binding request with half a second for each, on a thread of its own, on GLib's own
+// sockets, which are the same on every system.
 std::string firstStunThatAnswers(const std::vector<std::string>& list) {
+    GResolver* resolver = g_resolver_get_default();
+    std::string found;
     for (const std::string& entry : list) {
         const size_t colon = entry.rfind(':');
         if (colon == std::string::npos) continue;
         std::string host = entry.substr(0, colon);
         if (host.size() > 2 && host.front() == '[' && host.back() == ']') host = host.substr(1, host.size() - 2);
-        addrinfo hints{};
-        hints.ai_socktype = SOCK_DGRAM;
-        addrinfo* res = nullptr;
-        if (getaddrinfo(host.c_str(), entry.substr(colon + 1).c_str(), &hints, &res) != 0) continue;
+        const int port = std::atoi(entry.c_str() + colon + 1);
+        if (port <= 0 || port > 65535) continue;
+        GList* addresses = g_resolver_lookup_by_name(resolver, host.c_str(), nullptr, nullptr);
         bool answered = false;
-        for (addrinfo* a = res; a && !answered; a = a->ai_next) {
-            const int fd = socket(a->ai_family, a->ai_socktype, 0);
-            if (fd < 0) continue;
-            fcntl(fd, F_SETFD, FD_CLOEXEC);
+        for (GList* a = addresses; a && !answered; a = a->next) {
+            GInetAddress* ip = G_INET_ADDRESS(a->data);
+            GSocket* s = g_socket_new(g_inet_address_get_family(ip), G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, nullptr);
+            if (!s) continue;
+            GSocketAddress* to = g_inet_socket_address_new(ip, static_cast<guint16>(port));
             uint8_t request[20] = {0, 1, 0, 0, 0x21, 0x12, 0xA4, 0x42};
             RAND_bytes(request + 8, 12);
-            if (connect(fd, a->ai_addr, a->ai_addrlen) == 0 && send(fd, request, sizeof request, 0) == sizeof request) {
-                pollfd p{fd, POLLIN, 0};
-                if (poll(&p, 1, 500) == 1) {
-                    uint8_t reply[256];
-                    const ssize_t n = recv(fd, reply, sizeof reply, 0);
-                    answered = n >= 20 && reply[0] == 1 && reply[1] == 1 && std::memcmp(reply + 8, request + 8, 12) == 0;
-                }
+            if (g_socket_connect(s, to, nullptr, nullptr) &&
+                g_socket_send(s, reinterpret_cast<const gchar*>(request), sizeof request, nullptr, nullptr) == sizeof request &&
+                g_socket_condition_timed_wait(s, G_IO_IN, 500 * 1000, nullptr, nullptr)) {
+                uint8_t reply[256];
+                const gssize n = g_socket_receive(s, reinterpret_cast<gchar*>(reply), sizeof reply, nullptr, nullptr);
+                answered = n >= 20 && reply[0] == 1 && reply[1] == 1 && std::memcmp(reply + 8, request + 8, 12) == 0;
             }
-            close(fd);
+            g_object_unref(to);
+            g_object_unref(s);
         }
-        freeaddrinfo(res);
-        if (answered) return entry;
+        g_resolver_free_addresses(addresses);
+        if (answered) {
+            found = entry;
+            break;
+        }
     }
-    return {};
+    g_object_unref(resolver);
+    return found;
 }
 
 }  // namespace
@@ -88,7 +105,8 @@ public:
     explicit Loop(std::function<void()> wake);
     ~Loop();
 
-    bool canPlay();
+    std::vector<std::string> lacking();
+    bool h265();
     void begin(Server server);
     void ready(std::vector<std::string> stun, std::string turn, std::string relayReason);
     void signal(int generation, const std::string& details);
@@ -118,7 +136,8 @@ private:
     std::mutex startMu_;
     std::condition_variable startCv_;
     bool started_ = false;
-    bool canPlay_ = false;
+    std::vector<std::string> lacking_;
+    bool h265_ = false;
     GMainLoop* loop_ = nullptr;
 
     std::mutex eventsMu_;
@@ -171,9 +190,10 @@ Game::Loop::~Loop() {
 }
 
 void Game::Loop::run() {
+    useGStreamerBeside();
     gst_init(nullptr, nullptr);
-    const bool can = hasElement("webrtcbin") && hasElement("rtph264depay") && hasElement("h264parse") &&
-                     Stream::canDecodeH264() && hasElement("rtpopusdepay") && hasElement("opusdec") && hasElement("appsink");
+    std::vector<std::string> lacking = Stream::lacking();
+    const bool h265 = Stream::canDecodeH265();
     GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
     tickSource_ = g_timeout_add(
         50,
@@ -185,20 +205,28 @@ void Game::Loop::run() {
     {
         std::lock_guard<std::mutex> lk(startMu_);
         loop_ = loop;
-        canPlay_ = can;
+        lacking_ = lacking;
+        h265_ = h265;
         started_ = true;
     }
     startCv_.notify_all();
-    if (!can) std::fprintf(stderr, "[game] GStreamer lacks what a game needs: webrtcbin, H.264 and Opus\n");
+    for (const std::string& part : lacking) std::fprintf(stderr, "[game] GStreamer lacks %s, which a game needs\n", part.c_str());
+    if (lacking.empty()) std::fprintf(stderr, "[game] ready: %s\n", h265 ? "H.265 and H.264" : "H.264 only");
     g_main_loop_run(loop);
     g_source_remove(tickSource_);
     g_main_loop_unref(loop);
 }
 
-bool Game::Loop::canPlay() {
+std::vector<std::string> Game::Loop::lacking() {
     std::unique_lock<std::mutex> lk(startMu_);
     startCv_.wait(lk, [this]() { return started_; });
-    return canPlay_;
+    return lacking_;
+}
+
+bool Game::Loop::h265() {
+    std::unique_lock<std::mutex> lk(startMu_);
+    startCv_.wait(lk, [this]() { return started_; });
+    return h265_;
 }
 
 void Game::Loop::post(Event e) {
@@ -351,6 +379,7 @@ Rtc::Hooks Game::Loop::makeHooks() {
         session_->connected = true;
         session_->path = path;
         std::fprintf(stderr, "[game] connected: %s\n", path.c_str());
+        if (session_->stream) session_->stream->sayResends();
         Event e;
         e.kind = Event::Kind::Connected;
         e.text = path;
@@ -487,7 +516,13 @@ void Game::Loop::stopSession(bool bye) {
 
 Game::Game(std::function<void()> wake) : loop_(std::make_unique<Loop>(std::move(wake))) {}
 Game::~Game() = default;
-bool Game::canPlay() { return loop_->canPlay(); }
+bool Game::canPlay() { return loop_->lacking().empty(); }
+bool Game::canPlayH265() { return canPlay() && loop_->h265(); }
+std::vector<std::string> Game::lacking() { return loop_->lacking(); }
+std::vector<std::string> Game::unloadable() {
+    loop_->lacking();
+    return Stream::unloadable();
+}
 void Game::begin(Server server) { loop_->begin(std::move(server)); }
 void Game::ready(std::vector<std::string> stun, std::string turn, std::string relayReason) {
     loop_->ready(std::move(stun), std::move(turn), std::move(relayReason));

@@ -19,6 +19,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+#include "ui/glow.h"
+
 namespace ui {
 
 constexpr float kCanvasWidth = 1920.0f;
@@ -114,6 +116,8 @@ public:
     void setClip(float x, float y, float w, float h);
     void clearClip();
 
+    // Where the whole canvas is on the output, in its pixels.
+    SDL_FRect onOutput() const { return {ox_, oy_, kCanvasWidth * scale_, kCanvasHeight * scale_}; }
     // Where a pixel of the output is on the canvas.
     void toCanvas(float px, float py, float& cx, float& cy) const {
         cx = (px - ox_) / scale_;
@@ -139,7 +143,13 @@ public:
 
     // The menus' background, over the whole window. `alpha` under 1 lays it over what is there.
     void backdrop(float alpha = 1.0f);
+    // Black at `alpha` over the whole window, not only the canvas: a screen darkened under a panel,
+    // to the window's edges on a screen shaped other than a TV.
+    void dim(float alpha);
     void draw(const Rect& r);
+    // The bars around the host's game and the glow over them (glow.h): `screen` is the screen they
+    // fill and `game` where the game is on it, both in the output's pixels.
+    void glow(const SDL_FRect& screen, const SDL_FRect& game) { glow_.draw(screen, game); }
 
     float measure(const std::string& s, TextStyle st);
     float lineHeight(TextStyle st);
@@ -161,6 +171,7 @@ private:
     float px(float canvas) const { return canvas * scale_; }
 
     SDL_Renderer* renderer_;
+    Glow glow_;
     std::string fonts_;
     bool ready_ = false;
     int outW_ = 0, outH_ = 0;

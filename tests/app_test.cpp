@@ -58,11 +58,31 @@ void focusMovesAsOnTheConsole() {
     check(is(moves::friends(-1, 0, Move::Up), -1, Then::ToBar), "an empty list leaves only the bar");
     check(is(moves::friends(-1, 0, Move::Down), -1, Then::Edge), "an empty list has nothing to go down to");
 
-    check(is(moves::column(0, 7, Move::Up, true), 0, Then::ToBar), "up from Settings' first row reaches the bar");
-    check(is(moves::column(0, 4, Move::Up, false), 0, Then::Edge), "first run has no bar to go up to");
-    check(is(moves::column(2, 4, Move::Down, false), 3, Then::Moved), "down reaches Connect");
-    check(is(moves::column(3, 4, Move::Down, false), 3, Then::Edge), "Connect is the last");
-    check(is(moves::column(1, 2, Move::Press, false), 1, Then::Press), "a panel's answer is pressed");
+    // Settings as the console's: LinkUp (two rows), Controllers (one), and About, whose first row
+    // (Version) is only read.
+    const std::vector<std::vector<bool>> cats = {{true, true}, {true}, {false, true, true}};
+    const auto at = [](const moves::SettingsStep& s, int category, int row, Then then) {
+        return s.category == category && s.row == row && s.then == then;
+    };
+    check(at(moves::settings(0, -1, cats, Move::Up), 0, -1, Then::ToBar), "up off the first category reaches the bar");
+    check(at(moves::settings(0, -1, cats, Move::Down), 1, -1, Then::Moved), "down the list chooses the next category");
+    check(at(moves::settings(2, -1, cats, Move::Down), 2, -1, Then::Edge), "the last category goes no further");
+    check(at(moves::settings(1, -1, cats, Move::Left), 1, -1, Then::Edge), "left of the list is nothing");
+    check(at(moves::settings(0, -1, cats, Move::Right), 0, 0, Then::Moved), "right goes into the rows");
+    check(at(moves::settings(0, -1, cats, Move::Press), 0, 0, Then::Moved), "A goes into the rows too");
+    check(at(moves::settings(2, -1, cats, Move::Right), 2, 1, Then::Moved), "into the rows past one only read");
+    check(at(moves::settings(2, 1, cats, Move::Up), 2, 1, Then::Edge), "up stops at the first row that takes focus");
+    check(at(moves::settings(0, 0, cats, Move::Down), 0, 1, Then::Moved), "down the rows");
+    check(at(moves::settings(0, 1, cats, Move::Down), 0, 1, Then::Edge), "the last row goes no further");
+    check(at(moves::settings(0, 1, cats, Move::Left), 0, -1, Then::Moved), "left comes back to the list");
+    check(at(moves::settings(0, 1, cats, Move::Back), 0, -1, Then::Moved), "Back comes back to the list");
+    check(at(moves::settings(0, -1, cats, Move::Back), 0, -1, Then::Back), "Back from the list goes back");
+    check(at(moves::settings(0, 1, cats, Move::Press), 0, 1, Then::Press), "A presses a row");
+    check(at(moves::settings(1, 0, cats, Move::Right), 1, 0, Then::Edge), "right of a row is nothing");
+    check(is(moves::column(0, 4, Move::Up), 0, Then::Edge), "up from the first row goes nowhere");
+    check(is(moves::column(2, 4, Move::Down), 3, Then::Moved), "down reaches Connect");
+    check(is(moves::column(3, 4, Move::Down), 3, Then::Edge), "Connect is the last");
+    check(is(moves::column(1, 2, Move::Press), 1, Then::Press), "a panel's answer is pressed");
 
     moves::BarStep b = moves::bar(0, 2, Move::Right, true);
     check(b.at == 1 && !b.leave && !b.edge, "right on the bar switches to Settings");
