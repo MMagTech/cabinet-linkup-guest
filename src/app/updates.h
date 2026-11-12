@@ -1,7 +1,7 @@
 // Check for updates, the row in Settings: whether the project's Releases have a newer 2P Start than
 // this one. Asked a minute after the app starts, once a day after that, and when the row is pressed;
 // nothing is downloaded or changed. When there is one, Download opens its page in the browser, where
-// the friend takes the zip or the DMG as they did the first time. The words are the console's
+// the friend takes the Setup or the DMG as they did the first time. The words are the console's
 // (updateflow.cpp): "Up to date", "Update available".
 //
 // The one place it asks is GitHub's API, for the project's latest release: its tag ("v0.2.0") is

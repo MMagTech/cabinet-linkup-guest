@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # The Mac app as friends download it: in a DMG, with Applications beside it to drag it onto. Like the
-# Windows zip, it is not signed for other computers: it keeps the signature the install gave it
+# Windows Setup, it is not signed for other computers: it keeps the signature the install gave it
 # (cmake/MacLibraries.cmake), and a friend's Mac asks before it first opens it (ci/release-notes.md
 # says what to press).
 #

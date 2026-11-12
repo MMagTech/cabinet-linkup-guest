@@ -68,8 +68,8 @@ bool fromHands(const SDL_Event& e) {
 }
 
 // --check-game: everything a game needs that GStreamer lacks, and its plugins that would not load,
-// a line each, and nothing when it can play. CI runs it on the Windows zip on a computer with nothing
-// else of GStreamer's (ci/check-zip.ps1).
+// a line each, and nothing when it can play. CI runs it on the installed Windows app and the Mac app on
+// a computer with nothing else of GStreamer's (ci/check-setup.ps1, ci/check-app.sh).
 int checkGame() {
     game::Game game([] {});
     int found = 0;

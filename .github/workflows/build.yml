@@ -1,7 +1,7 @@
 name: Build
 
 # Every pull request and every push to main: the build and its tests on macOS and on Windows, the two
-# packages friends download (the Mac app in a DMG, the Windows zip), each tried on its own, and a
+# packages friends download (the Mac app in a DMG, the Windows Setup), each tried on its own, and a
 # read of every tracked file for anything private.
 #
 # A tag v<version> does the same, and then makes a draft release on GitHub with both packages, which
@@ -211,24 +211,35 @@ jobs:
           if-no-files-found: ignore
 
       # The app as a friend gets it: a folder that runs on a PC with nothing installed (CMakeLists.txt,
-      # "The Windows zip"), tried unpacked with nothing else of GStreamer's there.
-      - name: The zip
+      # "The Windows app"), in a Setup (ci/windows-setup.iss), which is installed, tried with nothing
+      # else of GStreamer's there, and uninstalled.
+      - name: The app's folder
         shell: pwsh
         run: |
           cmake --install build --config Release --prefix "dist\2P Start"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Compress-Archive -Path "dist\2P Start" -DestinationPath dist\2pstart-windows.zip
           $files = Get-ChildItem "dist\2P Start" -Recurse -File
-          "{0} files, {1:N1} MB, {2:N1} MB zipped" -f $files.Count, (($files | Measure-Object Length -Sum).Sum / 1MB), ((Get-Item dist\2pstart-windows.zip).Length / 1MB)
+          "{0} files, {1:N1} MB" -f $files.Count, (($files | Measure-Object Length -Sum).Sum / 1MB)
           $files | ForEach-Object { $_.FullName.Substring((Resolve-Path "dist\2P Start").Path.Length + 1) }
-      - name: The zip, on its own
+      - name: The Setup
         shell: pwsh
-        run: ci/check-zip.ps1 dist\2pstart-windows.zip
-      - name: The zip, kept
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $version = (Select-String -Path CMakeLists.txt -Pattern '^project\(cabinet-linkup-guest VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$version" "/DSource=$(Resolve-Path 'dist\2P Start')" "/DOutput=$(Resolve-Path dist)" ci\windows-setup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: The Setup, tried
+        shell: pwsh
+        run: ci/check-setup.ps1 "dist\2P Start Setup.exe"
+      - name: The Setup, kept
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: 2pstart-windows
-          path: dist/2P Start
+          path: dist/2P Start Setup.exe
           if-no-files-found: error
 
   # A tag v<version>: a draft release with both packages, named for the version, which MMagTech
@@ -246,7 +257,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: 2pstart-windows
-          path: packages/windows/2P Start
+          path: packages/windows
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: 2pstart-mac
@@ -261,8 +272,8 @@ jobs:
             echo "The tag is $TAG, but the build says it is version $version" >&2
             exit 1
           fi
-          (cd packages/windows && zip -qr "../2P-Start-$version-Windows.zip" "2P Start")
+          mv "packages/windows/2P Start Setup.exe" "packages/2P-Start-$version-Windows-Setup.exe"
           mv "packages/mac/2P Start.dmg" "packages/2P-Start-$version-Mac.dmg"
           sed "s/@VERSION@/$version/g" ci/release-notes.md > packages/notes.md
           gh release create "$TAG" --draft --title "2P Start $version" --notes-file packages/notes.md \
-            "packages/2P-Start-$version-Windows.zip" "packages/2P-Start-$version-Mac.dmg"
+            "packages/2P-Start-$version-Windows-Setup.exe" "packages/2P-Start-$version-Mac.dmg"

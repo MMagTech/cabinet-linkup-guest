@@ -10,7 +10,7 @@
 // An invite is a Windows notification with Join and Decline on it. A program that no package
 // installed has no name for the system to show its notifications under, so 2P Start gives itself
 // one, under the person's own registry key, each time it starts (as Firefox's own portable copy
-// does): no administrator, no shortcut, and the zip stays a folder that runs where it is unpacked.
+// does), so it has one however it came to be on the PC; the Setup's Start menu entry carries the same.
 // Should Windows refuse it, the tray's own balloon says the invite instead, and a click on it opens
 // Join or Decline.
 
@@ -226,6 +226,16 @@ LRESULT CALLBACK onMessage(HWND window, UINT message, WPARAM w, LPARAM l) {
     }
     if (message == kOpenMessage) {
         push(s->event, Ask::Open);
+        return 0;
+    }
+    // Asked to end, by Windows signing out or by Setup updating 2P Start (its Restart Manager): it
+    // quits, as Quit does, since it lives on in the tray otherwise.
+    if (message == WM_ENDSESSION) {
+        if (w) {
+            SDL_Event e{};
+            e.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&e);
+        }
         return 0;
     }
     // Explorer started again: its tray is new and empty.

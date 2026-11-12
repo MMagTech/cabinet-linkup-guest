@@ -8,7 +8,7 @@
 //             the app wherever it is moved; run as a bare program, as while it is worked on, a launch
 //             agent of its own, ~/Library/LaunchAgents/io.github.mmagtech.2pstart.plist
 //   Windows   a value under HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run, written
-//             again at each start, so it follows a zip unpacked somewhere else
+//             again at each start, so it follows the program wherever it is
 // The app inside the Mac app takes away the launch agent a bare copy wrote.
 
 #pragma once

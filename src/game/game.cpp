@@ -36,7 +36,7 @@ constexpr int64_t kBeatMs = 250;
 constexpr int64_t kDropMs = 2000;
 constexpr int64_t kConnectLimitMs = 30000;
 
-// A copy of the app with GStreamer beside it, as the Windows zip and the Mac app have it: its own
+// A copy of the app with GStreamer beside it, as the Windows app and the Mac app have it: its own
 // plugins and no others from elsewhere on the computer, kept in a registry of their own, read in the
 // app itself, which has no helper beside it for that. Elsewhere, and in a build on the computer it
 // was built on, GStreamer is the one installed.

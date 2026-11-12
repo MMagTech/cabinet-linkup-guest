@@ -288,8 +288,8 @@ if(TWOPSTART_GAME AND DEFINED VCPKG_TARGET_TRIPLET AND (WIN32 OR APPLE))
     endforeach()
 endif()
 
-# The Windows zip: a folder, "2P Start", that runs where it is unpacked, on a PC with nothing
-# installed (ci/check-zip.ps1 tries it so). The program, "2P Start.exe", with its font and its
+# The Windows app: a folder, "2P Start", that runs where it is, on a PC with nothing installed,
+# which ci/windows-setup.iss puts in a Setup (ci/check-setup.ps1 tries it so). The program, "2P Start.exe", with its font and its
 # notifications' picture beside it; the plugins in lib/gstreamer-1.0, where game.cpp tells GStreamer
 # to look; their libraries (cmake/WindowsLibraries.cmake) and Microsoft's C++ runtime beside the
 # program; and licenses/.

@@ -49,19 +49,21 @@ line again.
 
 Windows 10 or 11, 64-bit.
 
-1. Download `2P-Start-…-Windows.zip` from Releases.
-2. Unzip it anywhere, and open `2P Start.exe` in the `2P Start` folder.
-3. Windows says "Windows protected your PC": press More info, then Run anyway.
+1. Download `2P-Start-…-Windows-Setup.exe` from Releases and open it.
+2. Windows says "Windows protected your PC": press More info, then Run anyway.
+3. Press Install. It goes in the Start menu, for you alone, with no
+   administrator password.
 
-Or, before you unzip it: right-click the zip, Properties, tick Unblock, and
+Or, before you open it: right-click the Setup, Properties, tick Unblock, and
 press OK. Or open PowerShell, paste this line, and press Return. Either way,
 Windows asks nothing when it opens.
 
 ```powershell
-Get-ChildItem "$HOME\Downloads\2P-Start-*-Windows.zip" | Unblock-File
+Get-ChildItem "$HOME\Downloads\2P-Start-*-Windows-Setup.exe" | Unblock-File
 ```
 
-After an update, do it again.
+To update, open the newer Setup the same way: it puts the new 2P Start over
+the old one, and keeps your pairing.
 
 ### The first time it opens
 
@@ -69,6 +71,16 @@ It asks for your friend's LinkUp server, the code from their People page, and
 a name. Copy and paste work in each box, and the mouse works as well as a
 controller. Closing the window leaves it running, in the tray or the menu bar,
 so invites still reach you; Settings, System, Keep running changes that.
+
+### Removing it
+
+On Windows: Settings, Apps, 2P Start, Uninstall. It takes 2P Start and its
+Startup entry, and asks whether to remove your pairing and settings too.
+
+On a Mac: quit 2P Start from its menu bar icon, and drag it from Applications
+to the Trash. Your pairing and settings stay, in the folder
+`~/Library/Application Support/CabinetOS 2P Start`, for if you put it back;
+drag that to the Trash too to remove them.
 
 ## Where it stands
 
@@ -78,7 +90,7 @@ so invites still reach you; Settings, System, Keep running changes that.
 - [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
 - [x] Picture, sound and a controller on macOS
 - [x] The Mac app, in a DMG, with its menu bar icon
-- [ ] The same on Windows, with its zip and its tray: built by CI, not yet run on a PC
+- [ ] The same on Windows, with its Setup and its tray: built by CI, not yet run on a PC
 
 ## How it is built
 
@@ -111,9 +123,11 @@ parts of GStreamer a game uses, so it runs on a Mac with nothing installed.
 
 On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28.8's own installer, whose OpenSSL
 the app uses. [The workflow](.github/workflows/build.yml) is the worked example. After the build,
-`cmake --install build --config Release --prefix <folder>` makes the folder the Windows zip holds: the
-app, its font, only the parts of GStreamer a game uses, and Microsoft's C++ runtime, so it runs on a
-PC with nothing installed. Each CI run on Windows keeps that folder as `2pstart-windows`.
+`cmake --install build --config Release --prefix <folder>` makes the app's folder: the app, its font,
+only the parts of GStreamer a game uses, and Microsoft's C++ runtime, so it runs on a PC with nothing
+installed. Inno Setup 6 puts that in a Setup ([windows-setup.iss](ci/windows-setup.iss)), with its
+uninstaller. Each CI run on Windows installs it, tries it and uninstalls it, and keeps the Setup as
+`2pstart-windows`.
 
 A tag `v<version>`, the version in `CMakeLists.txt`, makes a draft release with both, and the words
 in `ci/release-notes.md`. Neither is signed.
