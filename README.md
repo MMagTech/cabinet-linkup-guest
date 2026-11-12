@@ -26,8 +26,8 @@ friend's console, and you need none of them.
   menu bar, and an invite comes as a notification with Join and Decline on it.
 - **The picture your computer's graphics chip decodes**, in H.265 where it can,
   as a console takes it, and H.264 everywhere else.
-- **Your own controller**, or a keyboard and mouse. A code pastes into its box
-  with Ctrl+V or Command-V.
+- **Your own controller**, or a keyboard and mouse. Every box copies and
+  pastes as any app's does, with the keys or a right-click.
 - **The console's own LinkUp**: its screens, its words, its sixteen colours and
   its sounds.
 - **It says when there is a new version**, from Settings, Check for updates.

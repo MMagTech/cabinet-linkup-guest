@@ -3,6 +3,7 @@
 #include "app/textline.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 
 #include "box.h"
@@ -74,12 +75,44 @@ Line noSpaceFirst(Line l) {
     return l;
 }
 
-// The caret no further than the end, on the edge of a letter, and in a code just after a letter.
+// Where a caret can be nearest `at`: no further than the end, on the edge of a letter, and in a code
+// just after a letter.
+size_t onEdge(const std::string& s, size_t at, Kind kind) {
+    at = std::min(at, s.size());
+    while (at > 0 && at < s.size() && insideLetter(s[at])) --at;
+    if (kind == Kind::Code) at = afterLetters(s, lettersBefore(s, at));
+    return at;
+}
+
+// The caret and the anchor where they can be, and no anchor where it would choose nothing.
 Line placed(Line l, Kind kind) {
-    l.caret = std::min(l.caret, l.text.size());
-    while (l.caret > 0 && l.caret < l.text.size() && insideLetter(l.text[l.caret])) --l.caret;
-    if (kind == Kind::Code) l.caret = afterLetters(l.text, lettersBefore(l.text, l.caret));
+    l.caret = onEdge(l.text, l.caret, kind);
+    if (l.anchor) l.anchor = onEdge(l.text, *l.anchor, kind);
+    if (l.anchor == l.caret) l.anchor.reset();
     return l;
+}
+
+// The chosen letters gone, the caret where they were.
+Line withoutChosen(Line now, Kind kind) {
+    const auto [from, to] = chosen(now, kind);
+    now.anchor.reset();
+    if (from == to) return now;
+    if (kind == Kind::Code) {
+        std::string letters = lettersOf(now.text);
+        const size_t k = lettersBefore(now.text, from);
+        letters.erase(k, lettersBefore(now.text, to) - k);
+        return grouped(letters, k);
+    }
+    now.text.erase(from, to - from);
+    now.caret = from;
+    return kind == Kind::Name ? noSpaceFirst(std::move(now)) : now;
+}
+
+// A byte of a word: a letter, a digit, _, or any letter past ASCII.
+bool inWord(const std::string& s, size_t at) {
+    if (at >= s.size()) return false;
+    const unsigned char c = static_cast<unsigned char>(s[at]);
+    return c >= 0x80 || std::isalnum(c) || c == '_';
 }
 
 size_t roomIn(const std::string& s, size_t most) { return most > s.size() ? most - s.size() : 0; }
@@ -87,21 +120,25 @@ size_t roomIn(const std::string& s, size_t most) { return most > s.size() ? most
 }  // namespace
 
 Line add(Line now, const std::string& text, Kind kind) {
-    now = placed(std::move(now), kind);
+    const Line was = placed(std::move(now), kind);
+    now = withoutChosen(was, kind);
+    std::string typed;
     switch (kind) {
         case Kind::Code: {
             std::string letters = lettersOf(now.text);
             const size_t k = lettersBefore(now.text, now.caret);
-            std::string typed = lettersOf(linkup::tidyCode(text));
+            typed = lettersOf(linkup::tidyCode(text));
             typed.resize(std::min(typed.size(), roomIn(letters, codeLetters())));
             letters.insert(k, typed);
-            return grouped(letters, k + typed.size());
+            now = grouped(letters, k + typed.size());
+            break;
         }
         case Kind::Name: {
-            const std::string typed = box::cleanText(text, roomIn(now.text, box::kMaxUsername));
+            typed = box::cleanText(text, roomIn(now.text, box::kMaxUsername));
             now.text.insert(now.caret, typed);
             now.caret += typed.size();
-            return noSpaceFirst(std::move(now));
+            now = noSpaceFirst(std::move(now));
+            break;
         }
         case Kind::Address: {
             // No spaces or line ends in an address: a pasted one often brings some.
@@ -110,17 +147,18 @@ Line add(Line now, const std::string& text, Kind kind) {
                 if (c <= 0x20 || c == 0x7F) continue;
                 kept.push_back(static_cast<char>(c));
             }
-            const std::string typed = box::cleanText(kept, roomIn(now.text, kMaxAddress));
+            typed = box::cleanText(kept, roomIn(now.text, kMaxAddress));
             now.text.insert(now.caret, typed);
             now.caret += typed.size();
-            return now;
+            break;
         }
     }
-    return now;
+    return typed.empty() ? was : now;
 }
 
 Line backspace(Line now, Kind kind) {
     now = placed(std::move(now), kind);
+    if (now.anchor) return withoutChosen(std::move(now), kind);
     if (now.caret == 0) return now;
     if (kind == Kind::Code) {
         // The dash between groups is the code's, not typed: the letter before it goes.
@@ -137,6 +175,7 @@ Line backspace(Line now, Kind kind) {
 
 Line forwardDelete(Line now, Kind kind) {
     now = placed(std::move(now), kind);
+    if (now.anchor) return withoutChosen(std::move(now), kind);
     if (now.caret >= now.text.size()) return now;
     if (kind == Kind::Code) {
         std::string letters = lettersOf(now.text);
@@ -148,21 +187,72 @@ Line forwardDelete(Line now, Kind kind) {
     return kind == Kind::Name ? noSpaceFirst(std::move(now)) : now;
 }
 
-Line step(Line now, int by, Kind kind) {
+Line step(Line now, int by, Kind kind, bool choosing) {
     now = placed(std::move(now), kind);
+    if (now.anchor && !choosing) {
+        const auto [from, to] = chosen(now, kind);
+        now.caret = by < 0 ? from : to;
+        now.anchor.reset();
+        return placed(std::move(now), kind);
+    }
+    const size_t from = now.anchor.value_or(now.caret);
     if (kind == Kind::Code) {
         const size_t k = lettersBefore(now.text, now.caret);
         const size_t n = lettersOf(now.text).size();
         now.caret = afterLetters(now.text, by < 0 ? (k > 0 ? k - 1 : 0) : std::min(k + 1, n));
-        return now;
+    } else {
+        now.caret = by < 0 ? previousLetter(now.text, now.caret) : nextLetter(now.text, now.caret);
     }
-    now.caret = by < 0 ? previousLetter(now.text, now.caret) : nextLetter(now.text, now.caret);
-    return now;
+    if (choosing) now.anchor = from;
+    return placed(std::move(now), kind);
 }
 
-Line moveTo(Line now, size_t at, Kind kind) {
+Line moveTo(Line now, size_t at, Kind kind, bool choosing) {
+    now = placed(std::move(now), kind);
+    const size_t from = now.anchor.value_or(now.caret);
     now.caret = at;
+    now.anchor.reset();
+    if (choosing) now.anchor = from;
     return placed(std::move(now), kind);
+}
+
+Line word(Line now, size_t at, Kind kind) {
+    now = placed(std::move(now), kind);
+    const std::string& s = now.text;
+    at = onEdge(s, at, Kind::Name);
+    size_t from = at, to = at;
+    if (inWord(s, at) || (at > 0 && inWord(s, previousLetter(s, at)))) {
+        while (from > 0 && inWord(s, previousLetter(s, from))) from = previousLetter(s, from);
+        while (inWord(s, to)) to = nextLetter(s, to);
+    } else if (at < s.size()) {
+        to = nextLetter(s, at);
+    } else {
+        from = previousLetter(s, at);
+    }
+    now.anchor = from;
+    now.caret = to;
+    return placed(std::move(now), kind);
+}
+
+Line all(Line now, Kind kind) {
+    now.anchor = 0;
+    now.caret = now.text.size();
+    return placed(std::move(now), kind);
+}
+
+std::pair<size_t, size_t> chosen(Line now, Kind kind) {
+    now = placed(std::move(now), kind);
+    if (!now.anchor) return {now.caret, now.caret};
+    size_t from = std::min(*now.anchor, now.caret);
+    const size_t to = std::max(*now.anchor, now.caret);
+    if (kind == Kind::Code)
+        while (from < to && now.text[from] == '-') ++from;
+    return {from, to};
+}
+
+std::string chosenText(Line now, Kind kind) {
+    const auto [from, to] = chosen(now, kind);
+    return now.text.substr(from, to - from);
 }
 
 bool ready(const std::string& value, Kind kind) {

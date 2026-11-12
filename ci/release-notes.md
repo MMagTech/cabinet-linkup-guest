@@ -8,4 +8,4 @@
 
 Each also has a way with one line to copy and paste in place of the clicks: [Installing](https://github.com/MMagTech/cabinet-linkup-guest#installing). After an update, do it again; your pairing is kept.
 
-On first run it asks for your friend's LinkUp server, the code from their People page, and a name. A code pastes in with Ctrl+V or Command-V. Closing the window leaves it running, in the tray or the menu bar, so invites still reach you; Settings, System, Keep running changes that.
+On first run it asks for your friend's LinkUp server, the code from their People page, and a name. Every box copies and pastes as any app's does, with the keys or a right-click. Closing the window leaves it running, in the tray or the menu bar, so invites still reach you; Settings, System, Keep running changes that.

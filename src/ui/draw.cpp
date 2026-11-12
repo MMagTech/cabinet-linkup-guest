@@ -229,10 +229,10 @@ TTF_Font* Canvas::font(TextStyle st) {
     return f;
 }
 
-std::optional<size_t> Canvas::caretAt(int id, float x) const {
+std::optional<size_t> Canvas::caretAt(int id, float x, bool anywhere) const {
     for (auto it = letters_.rbegin(); it != letters_.rend(); ++it) {
         if (it->id != id) continue;
-        if (x < it->left || x >= it->right || it->gaps.empty()) return std::nullopt;
+        if (it->gaps.empty() || (!anywhere && (x < it->left || x >= it->right))) return std::nullopt;
         const Letters::Gap* nearest = &it->gaps.front();
         for (const Letters::Gap& g : it->gaps)
             if (std::fabs(g.x - x) < std::fabs(nearest->x - x)) nearest = &g;
