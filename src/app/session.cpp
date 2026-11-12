@@ -3,6 +3,7 @@
 // words for the screens, a drop, the pause, leaving, the friend's pad, and the picture.
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -21,6 +22,19 @@ constexpr float kDropEndsSeconds = 60.0f;
 constexpr float kPressEverySeconds = 2.0f;
 constexpr float kPadKeepAliveSeconds = 0.1f;
 constexpr Uint32 kRumbleMs = 300;
+
+// What a sensor reads now, in SDL's units and axes (the console's tilt.h): false, with zeros, when the
+// controller has no such sensor or it is off.
+bool readSensor(SDL_Gamepad* pad, SDL_SensorType type, float out[3]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    return pad && SDL_GamepadSensorEnabled(pad, type) && SDL_GetGamepadSensorData(pad, type, out, 3);
+}
+
+// linkuppad::differs: anything but `seq`.
+bool differs(const linkupwire::Pad& a, const linkupwire::Pad& b) {
+    return a.senses != b.senses || a.buttons != b.buttons || std::memcmp(a.axes, b.axes, sizeof a.axes) != 0 ||
+           std::memcmp(a.accel, b.accel, sizeof a.accel) != 0 || std::memcmp(a.gyro, b.gyro, sizeof a.gyro) != 0;
+}
 
 }  // namespace
 
@@ -158,6 +172,7 @@ void App::peerEndedSession() {
 // linkupSessionClosed: back on the list.
 void App::sessionClosed() {
     if (SDL_Gamepad* pad = playingPad()) SDL_RumbleGamepad(pad, 0, 0, 0);
+    sense(nullptr);
     game_->end(false);
     session_.reset();
     place_ = Place::Friends;
@@ -303,10 +318,12 @@ void App::tickSession(float dt) {
     }
 }
 
-// linkupSendPad: the controller chosen in Settings, to the host, whenever it changes and every tenth of
-// a second. Only presses travel: the keyboard and the mouse stay here. The Guide button never goes:
-// it is this computer's. With another program in front, the pad rests: SDL still reads it there, for
-// the idle rule (main.cpp), but those presses are for that program.
+// linkupSendPad and linkuppad::read: the controller chosen in Settings, to the host, whenever it
+// changes and every tenth of a second: its presses, its sticks, and its tilt, with the motion sensors
+// it has. Only the controller travels: the keyboard and the mouse stay here. The Guide button never
+// goes: it is this computer's. Asleep (something over the picture, or another program in front, where
+// SDL still reads the pad for the idle rule, main.cpp), it is let go and held still: no button,
+// sticks centred, no turning, and tilted as the last state sent had it.
 void App::sendPad(float dt) {
     if (!session_ || place_ != Place::Game || !session_->streamUp) return;
     Session& s = *session_;
@@ -314,20 +331,48 @@ void App::sendPad(float dt) {
     const bool inFront = (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS) != 0;
     const bool asleep = !pictureBehind() || overlay_.kind != Overlay::Kind::None || !inFront;
     SDL_Gamepad* gp = playingPad();
+    sense(gp);
+    float accel[3], gyro[3];
+    const bool hasAccel = readSensor(gp, SDL_SENSOR_ACCEL, accel);
+    const bool hasGyro = readSensor(gp, SDL_SENSOR_GYRO, gyro);
+    pad.senses = static_cast<uint8_t>((hasAccel ? linkupwire::kSenseAccel : 0) | (hasGyro ? linkupwire::kSenseGyro : 0));
     if (gp && !asleep) {
         for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
             if (b == SDL_GAMEPAD_BUTTON_GUIDE) continue;
             if (SDL_GetGamepadButton(gp, static_cast<SDL_GamepadButton>(b))) pad.buttons |= 1u << b;
         }
         for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) pad.axes[a] = SDL_GetGamepadAxis(gp, static_cast<SDL_GamepadAxis>(a));
+        std::memcpy(pad.accel, accel, sizeof pad.accel);
+        std::memcpy(pad.gyro, gyro, sizeof pad.gyro);
+    } else if (hasAccel) {
+        const bool held = (s.sent.senses & linkupwire::kSenseAccel) != 0;
+        std::memcpy(pad.accel, held ? s.sent.accel : accel, sizeof pad.accel);
     }
     s.padAge += dt;
-    const bool changed = pad.buttons != s.sent.buttons || std::memcmp(pad.axes, s.sent.axes, sizeof pad.axes) != 0;
-    if (!changed && s.padAge < kPadKeepAliveSeconds) return;
+    if (!differs(pad, s.sent) && s.padAge < kPadKeepAliveSeconds) return;
     s.padAge = 0.0f;
     pad.seq = ++s.seq;
     s.sent = pad;
     game_->pad(pad);
+}
+
+// linkuppad::senseHere: the playing controller's accelerometer and gyroscope on while a game's stream
+// is up, and off after it, or when another controller plays.
+void App::sense(SDL_Gamepad* pad) {
+    if (pad == sensing_) return;
+    for (const bool on : {false, true}) {
+        SDL_Gamepad* which = on ? pad : sensing_;
+        if (!which) continue;
+        SDL_SetGamepadSensorEnabled(which, SDL_SENSOR_ACCEL, on);
+        SDL_SetGamepadSensorEnabled(which, SDL_SENSOR_GYRO, on);
+    }
+    sensing_ = pad;
+    if (pad) {
+        const bool accel = SDL_GamepadHasSensor(pad, SDL_SENSOR_ACCEL), gyro = SDL_GamepadHasSensor(pad, SDL_SENSOR_GYRO);
+        const char* name = SDL_GetGamepadName(pad);
+        std::fprintf(stderr, "[game] %s plays, with %s\n", name ? name : "a controller",
+                     accel && gyro ? "an accelerometer and a gyroscope" : accel ? "an accelerometer" : gyro ? "a gyroscope" : "no motion sensors");
+    }
 }
 
 SDL_Gamepad* App::playingPad() const {

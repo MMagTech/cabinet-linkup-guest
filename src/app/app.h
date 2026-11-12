@@ -107,6 +107,7 @@ private:
     void fromGame();
     void tickSession(float dt);
     void sendPad(float dt);
+    void sense(SDL_Gamepad* pad);
     bool takeGameEvent(const SDL_Event& e);
     void moveInGame(moves::Move m);
     void fromPeer(const std::string& word, const std::string& game);
@@ -255,6 +256,7 @@ private:
 
     std::vector<SDL_JoystickID> padIds_;
     std::map<SDL_JoystickID, SDL_Gamepad*> pads_;
+    SDL_Gamepad* sensing_ = nullptr;   // the controller whose tilt is on, for a game
 
     // Nobody at the computer: Offline to friends, as a console left alone (idle.h).
     idle::Watch idle_;

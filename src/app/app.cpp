@@ -1167,6 +1167,7 @@ void App::padsChanged() {
             if (SDL_Gamepad* pad = SDL_OpenGamepad(id)) pads_[id] = pad;
     for (auto it = pads_.begin(); it != pads_.end();) {
         if (std::find(padIds_.begin(), padIds_.end(), it->first) == padIds_.end()) {
+            if (it->second == sensing_) sensing_ = nullptr;
             SDL_CloseGamepad(it->second);
             it = pads_.erase(it);
         } else {
