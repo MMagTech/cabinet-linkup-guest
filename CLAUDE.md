@@ -12,9 +12,9 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 | Path | Its job |
 |---|---|
 | `cabinetos/` | CabinetOS at a pinned commit. Its `linkup/` is built as it is written |
-| `CMakeLists.txt`, `cmake/` | The one build, for CI and by hand. `SoundQueue.cmake` cuts the console's sound queue out of `friend_sound.cpp`, where it sits beside PipeWire, for the game and for CabinetOS's Noise test, which runs whole |
+| `CMakeLists.txt`, `cmake/` | The one build, for CI and by hand. `SoundQueue.cmake` cuts the console's sound queue out of `friend_sound.cpp`, where it sits beside PipeWire, for the game and for CabinetOS's Noise test, which runs whole. `WindowsLibraries.cmake` finds the libraries the Windows zip carries |
 | `src/guest/` | 2P Start's own: who the friend is to a server, where the app keeps its folder and settings, and the friend's side of the server (`link`), a game's half of it included, with no window |
-| `src/game/` | A game: the friend's side of the connection on a thread of its own (`game`), the stream with its picture (`stream`) and its sound at the host's pace (`sound`), with no window. GStreamer from its own installer. `none.cpp` stands in where the game is not built yet: Windows |
+| `src/game/` | A game: the friend's side of the connection on a thread of its own (`game`), the stream with its picture (`stream`) and its sound at the host's pace (`sound`), with no window. GStreamer from its own installer; the picture decoded by the graphics chip, VideoToolbox on a Mac and Direct3D 11 on Windows. `none.cpp` stands in for a build without it (`-DTWOPSTART_GAME=OFF`) |
 | `src/pipewire/` | The one piece of PipeWire the console's sound queue uses, its ring buffer, as `src/win/` stands in for Windows |
 | `src/ui/` | What every screen is drawn with: rounded shapes and words on the console's 1920 by 1080 canvas (`draw`), the console's sixteen colours (`look`), and the parts screens share (`parts`). The numbers are the console's |
 | `src/screens/` | Each screen, given what to show. None knows a server, a stream or a controller |
@@ -22,7 +22,7 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 | `src/app/` | `2pstart`, the app: its window, what each press does, a game in it (`session.cpp`), and the three kinds of hands turned into the console's moves |
 | `assets/fonts/` | Noto Sans, the console's font, with its licence |
 | `src/cli/` | `2pstart-cli`, the app's server side on the command line |
-| `src/win/` | What Windows lacks for the console's code to build as written: `fileio.h` the Windows way, and a few POSIX names |
+| `src/win/` | What Windows lacks for the console's code to build as written: `fileio.h` the Windows way, a few POSIX names, and in `posix/` the POSIX headers `rtc.cpp` names |
 | `src/app/` `idle`, `startup`, `tray` | Where the app meets the computer, each system's own way: Offline with nobody at it, opening at login, and the tray, the Dock and notifications |
 | `tests/` | `guest-test` and `app-test`, with no network and no window |
 | `ci/` | What the workflow runs |

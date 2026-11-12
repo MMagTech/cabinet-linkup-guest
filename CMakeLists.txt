@@ -34,8 +34,8 @@ else()
     set(gst_default "")
 endif()
 set(GSTREAMER_ROOT "${gst_default}" CACHE PATH "Where GStreamer is installed")
+file(TO_CMAKE_PATH "${GSTREAMER_ROOT}" gst)
 if(WIN32 AND GSTREAMER_ROOT)
-    file(TO_CMAKE_PATH "${GSTREAMER_ROOT}" gst)
     if(NOT EXISTS "${gst}/lib/crypto.lib" OR NOT EXISTS "${gst}/include/openssl/opensslv.h")
         message(FATAL_ERROR "No OpenSSL in GStreamer at ${gst}: lib/crypto.lib and include/openssl are wanted.")
     endif()
@@ -115,10 +115,15 @@ target_include_directories(guest PUBLIC src)
 target_link_libraries(guest PUBLIC linkup_protocol)
 
 # The game: its connection, its picture and its sound (src/game), and the console's own connection
-# code, rtc.cpp, as it is written. Built on a Mac for now. Windows plays nothing until its picture and
-# sound are built: src/game/none.cpp stands in there, and Join ends the session at once. The same
-# stand-in builds anywhere with -DTWOPSTART_GAME=OFF, for working on the rest with no GStreamer.
-option(TWOPSTART_GAME "Build the game's picture, sound and connection" ${APPLE})
+# code, rtc.cpp, as it is written; on Windows, with src/win/posix in front of it for the few POSIX
+# headers it names. Built on a Mac and on Windows. With -DTWOPSTART_GAME=OFF, src/game/none.cpp
+# stands in, Join ends the session at once, and no GStreamer is needed, for working on the rest.
+if(APPLE OR WIN32)
+    set(game_default ON)
+else()
+    set(game_default OFF)
+endif()
+option(TWOPSTART_GAME "Build the game's picture, sound and connection" ${game_default})
 #
 # The console's sound queue is cut out of friend_sound.cpp, where it sits beside PipeWire, into a file
 # of its own (cmake/SoundQueue.cmake). It is built on every system, for the Noise test.
@@ -129,23 +134,27 @@ add_library(sound_queue STATIC "${GENERATED}/sound_queue.cpp")
 target_include_directories(sound_queue PUBLIC "${GENERATED}" "${CMAKE_SOURCE_DIR}/src/pipewire")
 
 if(TWOPSTART_GAME)
-    # GStreamer's own pkg-config, and its files, which say where everything is inside its framework.
+    # GStreamer's own pkg-config, and its files, which say where everything is inside its folder.
     # Here only: what was found before this, for curl, keeps its own.
+    if(EXISTS "${gst}/bin/pkg-config${CMAKE_EXECUTABLE_SUFFIX}")
+        set(PKG_CONFIG_EXECUTABLE "${gst}/bin/pkg-config${CMAKE_EXECUTABLE_SUFFIX}")
+    endif()
     find_package(PkgConfig REQUIRED)
-    if(EXISTS "${GSTREAMER_ROOT}/bin/pkg-config")
-        set(PKG_CONFIG_EXECUTABLE "${GSTREAMER_ROOT}/bin/pkg-config")
-    endif()
-    if(NOT EXISTS "${GSTREAMER_ROOT}/lib/pkgconfig/gstreamer-webrtc-1.0.pc")
+    if(NOT EXISTS "${gst}/lib/pkgconfig/gstreamer-webrtc-1.0.pc")
         message(FATAL_ERROR "No GStreamer at ${GSTREAMER_ROOT}. Install GStreamer's own runtime and development "
-                            "packages for macOS (the version in .github/workflows/build.yml), or set -DGSTREAMER_ROOT.")
+                            "packages (the version in .github/workflows/build.yml), or set -DGSTREAMER_ROOT.")
     endif()
-    set(ENV{PKG_CONFIG_PATH} "${GSTREAMER_ROOT}/lib/pkgconfig")
+    set(ENV{PKG_CONFIG_PATH} "${gst}/lib/pkgconfig")
     pkg_check_modules(GST REQUIRED IMPORTED_TARGET
-        gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-webrtc-1.0 gstreamer-sdp-1.0)
+        gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-webrtc-1.0 gstreamer-sdp-1.0 gio-2.0)
     add_library(game STATIC src/game/game.cpp src/game/stream.cpp src/game/sound.cpp "${LINKUP}/rtc.cpp")
     target_link_libraries(game PUBLIC sound_queue PkgConfig::GST)
     # As the console's linkup/Makefile: webrtcbin's library says it may still change.
     target_compile_definitions(game PUBLIC GST_USE_UNSTABLE_API)
+    if(WIN32)
+        set_source_files_properties("${LINKUP}/rtc.cpp" PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/src/win/posix")
+        target_link_libraries(game PUBLIC ws2_32)
+    endif()
 else()
     add_library(game STATIC src/game/none.cpp)
 endif()
@@ -214,6 +223,43 @@ add_executable(2pstart WIN32 src/app/main.cpp src/app/app.cpp src/app/session.cp
 target_link_libraries(2pstart PRIVATE app_core game)
 add_custom_command(TARGET 2pstart POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:2pstart>/assets")
+
+# The Windows zip, made by CI and by hand with:
+#
+#   cmake --install build --config Release --prefix <folder>
+#
+# The app and its font; only GStreamer's plugins a game uses, in lib/gstreamer-1.0 beside it, where
+# game.cpp tells GStreamer to look; the libraries those need, found by following each one's own list
+# into GStreamer's folder (cmake/WindowsLibraries.cmake); and Microsoft's C++ runtime beside them. So
+# it runs on a PC with nothing installed (ci/check-zip.ps1 tries it so).
+if(WIN32 AND TWOPSTART_GAME)
+    # As Stream::lacking (src/game/stream.cpp) lists their parts.
+    set(gst_plugins coreelements app webrtc nice dtls srtp sctp rtpmanager rtp videoparsersbad opus d3d11)
+    set(gst_plugin_files "")
+    foreach(plugin IN LISTS gst_plugins)
+        set(file "${gst}/lib/gstreamer-1.0/gst${plugin}.dll")
+        if(NOT EXISTS "${file}")
+            message(FATAL_ERROR "GStreamer at ${gst} has no plugin ${plugin}: ${file}")
+        endif()
+        list(APPEND gst_plugin_files "${file}")
+    endforeach()
+    install(TARGETS 2pstart RUNTIME DESTINATION .)
+    install(DIRECTORY assets/ DESTINATION assets)
+    install(FILES ${gst_plugin_files} DESTINATION lib/gstreamer-1.0)
+    # The libraries each names are read with dumpbin, which sits beside Visual Studio's linker.
+    get_filename_component(linker_dir "${CMAKE_LINKER}" DIRECTORY)
+    find_program(DUMPBIN dumpbin HINTS "${linker_dir}" REQUIRED)
+    install(CODE "
+        set(CMAKE_GET_RUNTIME_DEPENDENCIES_PLATFORM windows+pe)
+        set(CMAKE_GET_RUNTIME_DEPENDENCIES_TOOL dumpbin)
+        set(CMAKE_GET_RUNTIME_DEPENDENCIES_COMMAND \"${DUMPBIN}\")
+        set(TWOPSTART_EXE \"$<TARGET_FILE:2pstart>\")
+        set(TWOPSTART_GST_PLUGINS \"${gst_plugin_files}\")
+        set(TWOPSTART_GST_BIN \"${gst}/bin\")")
+    install(SCRIPT cmake/WindowsLibraries.cmake)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+    include(InstallRequiredSystemLibraries)
+endif()
 
 enable_testing()
 

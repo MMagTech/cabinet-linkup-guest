@@ -52,14 +52,20 @@ cmake --preset default && cmake --build --preset default && ctest --preset defau
 
 `-DTWOPSTART_GAME=OFF` builds everything but the game, with no GStreamer.
 
-On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28, whose OpenSSL the app uses.
-[The workflow](.github/workflows/build.yml) is the worked example.
+On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28.8's own installer, whose OpenSSL
+the app uses. [The workflow](.github/workflows/build.yml) is the worked example. After the build,
+`cmake --install build --config Release --prefix <folder>` makes the folder the Windows zip holds: the
+app, its font, only the parts of GStreamer a game uses, and Microsoft's C++ runtime, so it runs on a
+PC with nothing installed. Each CI run on Windows keeps that folder as `2pstart-windows`.
+
+The picture is decoded by the computer's graphics chip: VideoToolbox on a Mac, Direct3D 11 on
+Windows. Nearly every Mac and PC has one for H.264. There is no decoder in software.
 
 `2pstart` is the app. It opens a window, pairs on first run and keeps what it holds in a folder of
 its own; `--folder <path>` keeps it somewhere else instead, to try it as a second friend.
 `--try <file>` plays steps from a file into it and saves pictures: [trying.h](src/app/trying.h) says how.
-On Windows, until its picture and sound are built, Join tells the server and then ends the session
-at once, so the host is never left waiting.
+`--check-game` says what this computer lacks to play, a line each, with no window. On Windows,
+opened with no terminal, what it says as it runs goes to `2pstart.log` in its folder.
 
 The close button leaves it running, so invites still reach the friend: in the tray on Windows, in
 the Dock on a Mac. Startup, in Settings, opens it at login with no window (`--startup`). Friends see

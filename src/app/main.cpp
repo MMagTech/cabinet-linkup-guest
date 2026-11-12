@@ -6,6 +6,10 @@
 //   2pstart --folder <path>     the same, kept in that folder instead: for trying it as a second friend
 //   2pstart --try <file>        steps from a file played into it, with pictures saved (trying.h)
 //   2pstart --startup           as at login (startup.h): running, with no window until it is opened
+//   2pstart --check-game        whether this copy can play: what it lacks, a line each, and no window
+//
+// On Windows, opened from the Start menu or by a double-click, it has nowhere to write what it says
+// as it runs, so that goes to 2pstart.log in its folder, and the run before's to 2pstart.old.log.
 //
 // One runs for each folder: started again, it brings back the one running (tray.h). Its window's
 // close button hides it, and the app keeps running in the tray or the Dock until it is quit. In a
@@ -19,7 +23,13 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
+
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#endif
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -29,6 +39,7 @@
 #include "app/startup.h"
 #include "app/tray.h"
 #include "app/trying.h"
+#include "game/game.h"
 #include "guest/paths.h"
 
 namespace {
@@ -55,6 +66,41 @@ bool fromHands(const SDL_Event& e) {
     }
 }
 
+// --check-game: everything a game needs that GStreamer lacks, and its plugins that would not load,
+// a line each, and nothing when it can play. CI runs it on the Windows zip on a computer with nothing
+// else of GStreamer's (ci/check-zip.ps1).
+int checkGame() {
+    game::Game game([] {});
+    int found = 0;
+    for (const std::string& part : game.lacking()) {
+        std::printf("lacks %s\n", part.c_str());
+        ++found;
+    }
+    for (const std::string& plugin : game.unloadable()) {
+        std::printf("cannot load %s\n", plugin.c_str());
+        ++found;
+    }
+    std::fflush(stdout);
+    return found == 0 ? 0 : 1;
+}
+
+// The log, on Windows, when nobody is there to read it as it is written.
+void keepLog(const std::string& folder) {
+#ifdef _WIN32
+    const HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
+    if (folder.empty() || (err && err != INVALID_HANDLE_VALUE)) return;
+    const std::filesystem::path dir(std::u8string(folder.begin(), folder.end()));
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    std::filesystem::rename(dir / "2pstart.log", dir / "2pstart.old.log", ec);
+    if (!_wfreopen((dir / "2pstart.log").c_str(), L"w", stderr)) return;
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
+    SetStdHandle(STD_ERROR_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(stderr))));
+#else
+    (void)folder;
+#endif
+}
+
 int fail(const char* what, const std::string& why) {
     std::fprintf(stderr, "2pstart: %s: %s\n", what, why.c_str());
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "CabinetOS 2P Start", (std::string(what) + ": " + why).c_str(),
@@ -76,8 +122,10 @@ int main(int argc, char* argv[]) {
             folder = argv[++i];
         } else if (i + 1 < argc && flag == "--try") {
             tryFile = argv[++i];
+        } else if (flag == "--check-game") {
+            return checkGame();
         } else {
-            std::fprintf(stderr, "usage: 2pstart [--folder <path>] [--try <file>] [--startup]\n");
+            std::fprintf(stderr, "usage: 2pstart [--folder <path>] [--try <file>] [--startup] [--check-game]\n");
             return 2;
         }
     }
@@ -90,6 +138,7 @@ int main(int argc, char* argv[]) {
 
     // Already running with this folder: that one comes to the front instead, unless this is the login's.
     if (!folder.empty() && tray::another(folder, atLogin)) return 0;
+    keepLog(folder);
 
     SDL_SetAppMetadata("CabinetOS 2P Start", TWOPSTART_VERSION, "io.github.mmagtech.2pstart");
     // The close button hides the window (tray.h), and a controller is heard with another program in

@@ -20,8 +20,16 @@ bool hasElement(const char* name) {
     return true;
 }
 
-// The computer's own decoder: VideoToolbox on a Mac, which every Mac has for H.264.
-std::string decoder() { return hasElement("vtdec") ? "vtdec" : ""; }
+// The computer's own decoder, its graphics chip's: VideoToolbox on a Mac, Direct3D 11 on Windows,
+// which nearly every Mac and PC has for H.264. There is no other: one in software would bring
+// ffmpeg into the app.
+#ifdef _WIN32
+constexpr const char* kDecoder = "d3d11h264dec";
+#else
+constexpr const char* kDecoder = "vtdec";
+#endif
+
+std::string decoder() { return hasElement(kDecoder) ? kDecoder : ""; }
 
 }  // namespace
 
@@ -77,7 +85,31 @@ void Pictures::clear() {
 
 // ---- The stream ----------------------------------------------------------------
 
-bool Stream::canDecodeH264() { return !decoder().empty(); }
+std::vector<std::string> Stream::lacking() {
+    // webrtcbin and what it makes inside it: the connection (nice), what locks it (dtls, srtp), the
+    // data channels (sctp), and the packets' order, resends and repairs (rtpmanager, rtp). Then the
+    // picture and the sound, as onPadAdded builds them.
+    static const char* const kParts[] = {
+        "webrtcbin", "nicesrc", "nicesink", "dtlssrtpenc", "dtlssrtpdec", "srtpenc", "srtpdec", "sctpenc",
+        "sctpdec", "rtpbin", "rtpfunnel", "rtprtxreceive", "rtpulpfecdec", "rtpreddec", "rtph264depay",
+        "h264parse", kDecoder, "queue", "appsink", "rtpopusdepay", "opusdec", "capsfilter",
+    };
+    std::vector<std::string> out;
+    for (const char* part : kParts)
+        if (!hasElement(part)) out.emplace_back(part);
+    return out;
+}
+
+std::vector<std::string> Stream::unloadable() {
+    std::vector<std::string> out;
+    GList* plugins = gst_registry_get_plugin_list(gst_registry_get());
+    for (GList* p = plugins; p; p = p->next) {
+        GstPlugin* plugin = GST_PLUGIN(p->data);
+        if (GST_OBJECT_FLAG_IS_SET(plugin, GST_PLUGIN_FLAG_BLACKLISTED)) out.emplace_back(gst_plugin_get_name(plugin));
+    }
+    gst_plugin_list_free(plugins);
+    return out;
+}
 
 Stream::Stream(Rtc::Hooks hooks, std::function<void()> askFullPicture, Pictures& pictures)
     : hooks_(std::move(hooks)), askFull_(std::move(askFullPicture)), pictures_(pictures) {}

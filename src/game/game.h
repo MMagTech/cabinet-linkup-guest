@@ -17,8 +17,8 @@
 // A NEW CONNECTION is the host's to make: its connection details come under a higher number, and the
 // old stream goes and a new one starts with them. Nothing heard for 2 s is a drop.
 //
-// No GStreamer here: the window includes this, and where the game is not built yet (Windows, until
-// its picture and sound are), none.cpp stands in and can play nothing.
+// No GStreamer here: the window includes this, and where the game is not built (-DTWOPSTART_GAME=OFF),
+// none.cpp stands in and can play nothing.
 
 #pragma once
 
@@ -73,9 +73,13 @@ public:
     Game(const Game&) = delete;
     Game& operator=(const Game&) = delete;
 
-    // Whether this computer can play: GStreamer has webrtcbin and an H.264 decoder. Waits for
-    // GStreamer to start, the first time.
+    // Whether this computer can play: GStreamer has webrtcbin and everything a stream needs, the
+    // graphics chip's H.264 decoder included. Waits for GStreamer to start, the first time.
     bool canPlay();
+    // What it lacks, by GStreamer's names, and GStreamer's plugins that would not load: for
+    // --check-game.
+    std::vector<std::string> lacking();
+    std::vector<std::string> unloadable();
 
     // The window's thread. Each returns at once.
     //

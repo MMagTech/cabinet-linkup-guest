@@ -9,9 +9,10 @@
 // a missing piece before Opus fills it in, the one-picture queue before the picture leaves, and the
 // watchdog asking the host for a full picture while packets arrive and no picture comes out.
 //
-// WHAT IS THIS APP'S: the decoder is the computer's own, VideoToolbox on a Mac, and the picture is
-// kept in memory, the newest only, for the window to draw (Pictures). The colours are BT.601 limited
-// range, as the console states after its decoder; the window's texture says so (app.cpp).
+// WHAT IS THIS APP'S: the decoder is the computer's own, VideoToolbox on a Mac and Direct3D 11 on
+// Windows, and the picture is kept in memory, the newest only, for the window to draw (Pictures).
+// The colours are BT.601 limited range, as the console states after its decoder; the window's
+// texture says so (app.cpp).
 
 #pragma once
 
@@ -27,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "game/game.h"
 #include "game/sound.h"
@@ -62,8 +64,12 @@ public:
     void stop();
     Rtc* rtc() { return rtc_.get(); }
 
-    // Whether this computer can decode the host's picture: H.264, with a decoder GStreamer has.
-    static bool canDecodeH264();
+    // What a stream needs that GStreamer does not have, by name: empty when it can play. The decoder
+    // is among them, so a computer that cannot decode H.264 in its graphics chip lacks it.
+    static std::vector<std::string> lacking();
+    // GStreamer's plugins that are there but would not load, most likely for a library they need
+    // that is not there.
+    static std::vector<std::string> unloadable();
 
 private:
     static void onPadAdded(GstElement*, GstPad* pad, gpointer self);
