@@ -153,7 +153,13 @@ bool set(bool on, std::string& why) {
         why = "no home folder";
         return false;
     }
-    return setAgent(std::string(home) + "/Library/LaunchAgents", on ? program() : std::string(), on, why);
+    const std::string agents = std::string(home) + "/Library/LaunchAgents";
+    if (inApp()) {
+        std::string ignored;
+        setAgent(agents, std::string(), false, ignored);
+        return setLoginItem(on, why);
+    }
+    return setAgent(agents, on ? program() : std::string(), on, why);
 #elif defined(_WIN32)
     HKEY key = nullptr;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, kRunKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) {

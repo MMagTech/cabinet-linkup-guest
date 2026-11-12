@@ -144,7 +144,8 @@ bool App::start(std::string& why) {
         toFirstRun();
     }
     // The computer's entry follows the row, and this program where it is now.
-    setStartup(settings_.startup);
+    startupEntry(settings_.keepRunning && settings_.startup);
+    updates_ = std::make_unique<updates::Check>(TWOPSTART_VERSION, wakeUp);
     padsChanged();
     return true;
 }
@@ -330,6 +331,7 @@ void App::tick(float dt) {
     if (std::optional<Move> m = input_.tick(dt)) move(*m);
     fromServer();
     fromGame();
+    tickUpdates(dt);
     tickSession(dt);
     sendPad(dt);
     takePicture();
@@ -399,26 +401,7 @@ void App::draw() {
             screens::drawFriends(canvas_, v);
             break;
         }
-        case Place::Settings: {
-            screens::SettingsView v;
-            v.name = typingName_ ? typedName_ : name_;
-            v.typingName = typingName_;
-            v.caret = caret_;
-            v.still = still_;
-            v.colour = colourIndex(settings_.colour);
-            v.fullScreen = settings_.fullScreen;
-            v.startup = settings_.startup;
-            v.sounds = static_cast<int>(soundLevel(settings_.sounds));
-            v.controllers = padNames();
-            v.controller = chosenPad();
-            v.server = address_;
-            v.version = TWOPSTART_VERSION;
-            v.category = settingsCategory_;
-            v.focus = settingsRow_;
-            v.barFocused = barFocused_;
-            screens::drawSettings(canvas_, v);
-            break;
-        }
+        case Place::Settings: screens::drawSettings(canvas_, settingsView()); break;
         case Place::Game: {
             if (session_ && session_->shows == Shows::Picture) {
                 drawPicture();
@@ -471,6 +454,29 @@ void App::draw() {
         parts::notice(canvas_, notice_.text, notice_.tone, notice_.dot ? &*notice_.dot : nullptr);
         canvas_.setAlpha(1.0f);
     }
+}
+
+// Settings as they are now, for the screen and for where the focus may go.
+screens::SettingsView App::settingsView() const {
+    screens::SettingsView v;
+    v.name = typingName_ ? typedName_ : name_;
+    v.typingName = typingName_;
+    v.caret = caret_;
+    v.still = still_;
+    v.colour = colourIndex(settings_.colour);
+    v.fullScreen = settings_.fullScreen;
+    v.keepRunning = settings_.keepRunning;
+    v.startup = settings_.startup;
+    v.updates = updatesWord();
+    v.sounds = static_cast<int>(soundLevel(settings_.sounds));
+    v.controllers = padNames();
+    v.controller = chosenPad();
+    v.server = address_;
+    v.version = TWOPSTART_VERSION;
+    v.category = settingsCategory_;
+    v.focus = settingsRow_;
+    v.barFocused = barFocused_;
+    return v;
 }
 
 // ---- Hands -----------------------------------------------------------------
@@ -700,9 +706,10 @@ void App::moveOnSettings(Move m) {
         return;
     }
     std::vector<std::vector<bool>> focusable;
+    const screens::SettingsView view = settingsView();
     for (const SettingsCategory& cat : settingsCategories()) {
         focusable.emplace_back();
-        for (const setting::Row r : cat.rows) focusable.back().push_back(settingFocusable(r));
+        for (const setting::Row r : cat.rows) focusable.back().push_back(settingFocusable(r, view));
     }
     const moves::SettingsStep s = moves::settings(settingsCategory_, settingsRow_, focusable, m);
     cue(m == Move::Back && s.then == Then::Moved ? Then::Back : s.then);
@@ -740,7 +747,9 @@ void App::pressSetting(int row) {
         case setting::Controller:
         case setting::Sounds: stepSetting(row, 1); break;
         case setting::FullScreen: setFullScreen(!settings_.fullScreen); break;
+        case setting::KeepRunning: setKeepRunning(!settings_.keepRunning); break;
         case setting::Startup: setStartup(!settings_.startup); break;
+        case setting::Updates: pressUpdates(); break;
         case setting::Server: serverPanel(); break;
         case setting::HowTo:
         case setting::Credits:
@@ -1216,20 +1225,102 @@ void App::setFullScreen(bool on) {
     keepSettings();
 }
 
-// Startup: the computer's own entry, then the row. Only for the person's own folder: a copy tried in
-// another (--folder) leaves the computer's entry alone, and keeps the row in its own folder.
+// Keep running: Off, the close button quits, and Startup is greyed, its entry off, its row kept for
+// when Keep running is on again.
+void App::setKeepRunning(bool on) {
+    if (settings_.keepRunning == on) return;
+    settings_.keepRunning = on;
+    startupEntry(on && settings_.startup);
+    keepSettings();
+}
+
+// Startup: the computer's own entry, then the row. Nothing while the app does not keep running.
 void App::setStartup(bool on) {
-    std::string why;
-    if (folder_ == guest::dataFolder() && !startup::set(on, why)) {
-        std::fprintf(stderr, "2pstart: Startup: %s\n", why.c_str());
-        return;
-    }
+    if (!settings_.keepRunning || !startupEntry(on)) return;
     if (settings_.startup == on) return;
     settings_.startup = on;
     keepSettings();
 }
 
+// The computer's entry. Only for the person's own folder: a copy tried in another (--folder) leaves
+// the computer's entry alone, and keeps the row in its own folder.
+bool App::startupEntry(bool on) {
+    std::string why;
+    if (folder_ == guest::dataFolder() && !startup::set(on, why)) {
+        std::fprintf(stderr, "2pstart: Startup: %s\n", why.c_str());
+        return false;
+    }
+    return true;
+}
+
 void App::keepSettings() { guest::keepSettings(folder_, settings_); }
+
+// ---- Check for updates ------------------------------------------------------------
+
+namespace {
+
+// A minute after the start, so it does not crowd signing in, and a day after each check.
+constexpr float kFirstCheckSeconds = 60.0f;
+constexpr float kCheckEverySeconds = 24.0f * 60.0f * 60.0f;
+
+}  // namespace
+
+std::string App::updatesWord() const {
+    if (!updates_) return {};
+    switch (updates_->state()) {
+        case updates::State::Checking: return "Checking\xE2\x80\xA6";
+        case updates::State::UpToDate: return "Up to date";
+        case updates::State::Available: return "Update available";
+        case updates::State::Failed: return "Couldn't check";
+        case updates::State::None: break;
+    }
+    return {};
+}
+
+void App::tickUpdates(float dt) {
+    if (!updates_) return;
+    sinceCheck_ += dt;
+    const bool never = updates_->state() == updates::State::None;
+    if ((never && sinceCheck_ >= kFirstCheckSeconds) || sinceCheck_ >= kCheckEverySeconds) {
+        sinceCheck_ = 0.0f;
+        updates_->start();
+    }
+    if (!updates_->ended()) return;
+    const bool asked = updateAsked_;
+    updateAsked_ = false;
+    if (updates_->state() != updates::State::Available) return;
+    // Pressed: the question at once. Found by itself: said once for each version, as the console's
+    // weekly check says it (updateflow.cpp).
+    if (asked && place_ == Place::Settings && overlay_.kind == Overlay::Kind::None) {
+        askDownload();
+    } else if (!asked && updateSaid_ != updates_->found().version) {
+        updateSaid_ = updates_->found().version;
+        if (place_ != Place::Game) notice_.say("Update available", Tone::Info);
+    }
+}
+
+void App::pressUpdates() {
+    if (!updates_) return;
+    if (updates_->state() == updates::State::Available) {
+        askDownload();
+        return;
+    }
+    updateAsked_ = true;
+    sinceCheck_ = 0.0f;
+    updates_->start();
+}
+
+// "Update available": Download opens the release's page in the browser; Later leaves it.
+void App::askDownload() {
+    const updates::Release r = updates_->found();
+    parts::Panel p;
+    p.title = "Update available";
+    p.detail = "Version " + r.version;
+    p.options = {"Download", "Later"};
+    openPanel(p, [r](int answer) {
+        if (answer == 0) SDL_OpenURL(r.page.c_str());
+    });
+}
 
 // ---- The controllers ----------------------------------------------------------
 
@@ -1294,23 +1385,42 @@ void App::tellInvites(std::function<bool(const std::string&, const std::string&,
     onInvite_ = std::move(onInvite);
 }
 
-// From a notification: the list, the friend's tile, and their invite's question, as a press on it.
-void App::answerFrom(const std::string& who) {
+std::vector<App::Waiting> App::invites() const {
+    std::vector<Waiting> out;
+    if (!paired_ || !state_.instead.empty()) return out;
+    for (int index : order_) {
+        const linkup::Friend& f = state_.friends[static_cast<size_t>(index)];
+        if (f.status != linkup::Status::InvitedYou) continue;
+        out.push_back({f.name, linkup::invitedYou(f.name), f.game});
+    }
+    return out;
+}
+
+// From the tray's menu or a notification: the list, the friend's tile, and their invite's question,
+// as a press on it; or its answer, given on the notification. Nothing in a game, or over a question
+// or a line being typed.
+void App::reply(const std::string& who, int answer) {
     if (place_ != Place::Friends && place_ != Place::Settings) return;
-    if (typingName_ || overlay_.kind != Overlay::Kind::None) return;
+    if (typingName_ || (overlay_.kind != Overlay::Kind::None && overlay_.answering != who)) return;
     const int count = tileCount();
     for (int i = 0; i < count; ++i) {
         const linkup::Friend& f = state_.friends[static_cast<size_t>(order_[static_cast<size_t>(i)])];
         if (f.name != who || f.status != linkup::Status::InvitedYou) continue;
+        if (overlay_.kind != Overlay::Kind::None) closeOverlay();
+        if (answer == 1) {
+            decline(f);
+            return;
+        }
         switchTo(Place::Friends);
         barFocused_ = false;
         friendFocus_ = i;
-        answerInvite(f);
+        if (answer == 0) join(f);
+        else answerInvite(f);
         return;
     }
 }
 
-std::string App::statusLine() const { return linkup::statusLine(settings_.appearOffline); }
+bool App::seenOnline() const { return paired_ && state_.instead.empty() && statusWord() == "online"; }
 
 // The Status line: Appear Offline by another name, and kept.
 void App::flipStatus() {

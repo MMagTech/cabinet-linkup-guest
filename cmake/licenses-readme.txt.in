@@ -1,0 +1,14 @@
+CabinetOS 2P Start @PROJECT_VERSION@: the licences of everything it carries
+
+Each folder here is one line of Settings, About, Credits and licenses, and holds that part's own
+licence text.
+
+GStreamer, GLib and proxy-libintl are under the LGPL. They are GStreamer's own builds, version
+@GST_VERSION_TEXT@, from gstreamer.freedesktop.org, carried unchanged as separate libraries beside the
+app, so any of them can be swapped for another build. Their source, and the recipes they were built
+with, are at:
+
+    https://gstreamer.freedesktop.org/src/
+    https://gitlab.freedesktop.org/gstreamer/cerbero
+
+2P Start's own source is at https://github.com/MMagTech/cabinet-linkup-guest

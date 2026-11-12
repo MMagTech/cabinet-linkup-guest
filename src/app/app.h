@@ -23,6 +23,7 @@ struct json_object;
 #include "app/input.h"
 #include "app/notice.h"
 #include "app/textline.h"
+#include "app/updates.h"
 #include "game/game.h"
 #include "guest/link.h"
 #include "guest/settings.h"
@@ -65,10 +66,26 @@ public:
     // the console's line for it, and the game.
     // Told of each invite: true when the system said it, with a notification of its own.
     void tellInvites(std::function<bool(const std::string&, const std::string&, const std::string&)> onInvite);
-    // Join or Decline for this friend's invite, as pressing their tile opens it. Nothing when it ended.
-    void answerFrom(const std::string& who);
-    std::string statusLine() const;
+    // An invite waiting: who, the console's line for it ("Invite from Riley"), and the game.
+    struct Waiting {
+        std::string who;
+        std::string title;
+        std::string game;
+    };
+    std::vector<Waiting> invites() const;
+    // This friend's invite answered from outside the window: -1 opens Join or Decline, as pressing
+    // their tile does; 0 joins; 1 declines. Nothing when it has ended.
+    void reply(const std::string& who, int answer);
+    // Friends see this one Online now: signed in, not Appear Offline, and somebody at the computer.
+    bool seenOnline() const;
+    // The Status line's switch, which is Appear Offline by another name: true for Online.
+    bool online() const { return !settings_.appearOffline; }
     void flipStatus();
+    // Keep running: the close button hides the window rather than quitting.
+    bool keepRunning() const { return settings_.keepRunning; }
+    // Startup, as its row: on, and whether it can be changed (not while the app does not keep running).
+    bool startupOn() const { return settings_.keepRunning && settings_.startup; }
+    void flipStartup() { setStartup(!settings_.startup); }
     // True once ever, and kept: the first time the window hides to the tray, it is said.
     bool sayStillRunning();
 
@@ -181,8 +198,17 @@ private:
     void sayPairing(pairing::Result r);
     void setHands(parts::Hands hands);
     void setFullScreen(bool on);
+    void setKeepRunning(bool on);
     void setStartup(bool on);
+    bool startupEntry(bool on);
     void keepSettings();
+    screens::SettingsView settingsView() const;
+
+    // Check for updates (updates.h).
+    std::string updatesWord() const;
+    void tickUpdates(float dt);
+    void pressUpdates();
+    void askDownload();
 
     // The controllers.
     void padsChanged();
@@ -265,6 +291,11 @@ private:
     std::vector<SDL_JoystickID> padIds_;
     std::map<SDL_JoystickID, SDL_Gamepad*> pads_;
     SDL_Gamepad* sensing_ = nullptr;   // the controller whose tilt is on, for a game
+
+    std::unique_ptr<updates::Check> updates_;
+    float sinceCheck_ = 0.0f;      // seconds since the last check began
+    bool updateAsked_ = false;     // the row was pressed: the answer opens Update available
+    std::string updateSaid_;       // the version the notice last said was available
 
     // Nobody at the computer: Offline to friends, as a console left alone (idle.h).
     idle::Watch idle_;

@@ -1,11 +1,16 @@
 name: Build
 
-# Every pull request and every push to main: the build and its tests on macOS and on Windows, and
-# a read of every tracked file for anything private. Nothing here holds a secret.
+# Every pull request and every push to main: the build and its tests on macOS and on Windows, the two
+# packages friends download (the Mac app in a DMG, the Windows zip), each tried on its own, and a
+# read of every tracked file for anything private.
+#
+# A tag v<version> does the same, and then makes a draft release on GitHub with both packages, which
+# MMagTech publishes. Neither package is signed for other computers, and nothing here uses a secret.
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -27,14 +32,15 @@ jobs:
 
   mac:
     name: macOS
-    runs-on: macos-15
-    timeout-minutes: 30
+    runs-on: macos-26
+    timeout-minutes: 60
     env:
       # GStreamer's own runtime and development packages, from its own site and held to these
       # checksums: the same version as Windows, for the game.
       GST_VERSION: 1.28.8
       GST_RUNTIME_SHA256: d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe
       GST_DEVEL_SHA256: e6d380bc17be7eccf13e0154567d4718fc9321da822408c7ca0cd808b3d4a3f7
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -70,21 +76,49 @@ jobs:
           sudo installer -pkg gst-pkg/runtime.pkg -target /
           sudo installer -pkg gst-pkg/devel.pkg -target /
 
-      - name: Libraries
-        run: brew install openssl@3 json-c ninja sdl3 sdl3_ttf
+      - name: vcpkg's packages, from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-arm64-osx-13-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+
+      # The app to hand out: vcpkg's libraries built in, for Apple silicon and macOS 13 or later.
       - name: Build
         run: |
-          cmake --preset default
-          cmake --build --preset default
+          brew install ninja
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          export VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT"
+          cmake --preset mac
+          cmake --build --preset mac
       - name: Test
-        run: ctest --preset default
+        run: ctest --preset mac
       - name: The screens, as pictures
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: screens-macos
-          path: build/shots
+          path: build-mac/shots
           if-no-files-found: ignore
+
+      # The app as a friend gets it (CMakeLists.txt, "The Mac app"), tried with no GStreamer of the
+      # computer's own, then put in a DMG.
+      - name: The app
+        run: |
+          cmake --install build-mac --prefix dist
+          du -sh "dist/2P Start.app"
+          find "dist/2P Start.app" -type f | sed "s|^dist/||" | sort
+      - name: The app, on its own
+        run: ci/check-app.sh "dist/2P Start.app"
+      - name: The DMG
+        run: |
+          ci/mac-package.sh "dist/2P Start.app" "dist/2P Start.dmg"
+          du -h "dist/2P Start.dmg"
+      - name: The DMG, kept
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: 2pstart-mac
+          path: dist/2P Start.dmg
+          if-no-files-found: error
 
   windows:
     name: Windows
@@ -196,3 +230,39 @@ jobs:
           name: 2pstart-windows
           path: dist/2P Start
           if-no-files-found: error
+
+  # A tag v<version>: a draft release with both packages, named for the version, which MMagTech
+  # publishes once he has tried them. The tag must be the version the build says it is.
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [checks, mac, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: 2pstart-windows
+          path: packages/windows/2P Start
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: 2pstart-mac
+          path: packages/mac
+      - name: The release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(sed -n 's/^project(cabinet-linkup-guest VERSION \([0-9.]*\) .*/\1/p' CMakeLists.txt)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "The tag is $TAG, but the build says it is version $version" >&2
+            exit 1
+          fi
+          (cd packages/windows && zip -qr "../2P-Start-$version-Windows.zip" "2P Start")
+          mv "packages/mac/2P Start.dmg" "packages/2P-Start-$version-Mac.dmg"
+          sed "s/@VERSION@/$version/g" ci/release-notes.md > packages/notes.md
+          gh release create "$TAG" --draft --title "2P Start $version" --notes-file packages/notes.md \
+            "packages/2P-Start-$version-Windows.zip" "packages/2P-Start-$version-Mac.dmg"

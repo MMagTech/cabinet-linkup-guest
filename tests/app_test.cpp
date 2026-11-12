@@ -1,6 +1,7 @@
 // The app's parts that need no window and no network: where focus goes, what a controller, the
 // keys and the mouse ask for, what a typed line keeps, the settings file, the server's list of
-// friends read with each invite's sealed box opened, the idle rule, and Startup's entry.
+// friends read with each invite's sealed box opened, the idle rule, Startup's entry, the tray's words,
+// and what Check for updates reads.
 //
 //   app-test
 
@@ -17,6 +18,7 @@
 #include "app/startup.h"
 #include "app/textline.h"
 #include "app/tray_system.h"
+#include "app/updates.h"
 #include "box.h"
 #include "fileio.h"
 #include "guest/link.h"
@@ -271,6 +273,7 @@ void settingsAreKept(const std::string& root) {
     s.startup = true;
     s.saidTray = true;
     check(!none.startup && !none.saidTray, "Startup is off at first, and nothing has been said");
+    check(none.keepRunning, "Keep running is on at first");
     check(guest::keepSettings(folder, s), "the settings were not written");
     const guest::Settings back = guest::readSettings(folder);
     check(back.colour == "sunset" && back.fullScreen && back.controller == s.controller && back.appearOffline,
@@ -281,6 +284,10 @@ void settingsAreKept(const std::string& root) {
     cab::writeBytes(folder + "/settings.json", std::string("{\"full_screen\": true}"));
     const guest::Settings some = guest::readSettings(folder);
     check(some.fullScreen && some.colour == "purple", "a file with some settings keeps those and defaults the rest");
+    check(some.keepRunning, "a file from before Keep running keeps running");
+    guest::Settings off;
+    off.keepRunning = false;
+    check(guest::keepSettings(folder, off) && !guest::readSettings(folder).keepRunning, "Keep running off is kept");
     std::printf("  the settings are kept\n");
 }
 
@@ -447,6 +454,40 @@ void theRelayIsWrittenForWebrtcbin() {
     std::printf("  the relay is written for webrtcbin\n");
 }
 
+// The tray's status and hover words (tray.h), and the menu's line for an invite.
+void theTraySaysTheStatus() {
+    const std::vector<tray::Invite> none;
+    const std::vector<tray::Invite> riley = {{"Riley", "Invite from Riley", "Burnout 3"}, {"Sam", "Invite from Sam", ""}};
+    check(tray::statusOf(none, true) == tray::Status::Online, "Online with nothing waiting");
+    check(tray::statusOf(none, false) == tray::Status::Offline, "Offline with nothing waiting");
+    check(tray::statusOf(riley, false) == tray::Status::Invite, "an invite shows, Online or not");
+    check(tray::tipOf(none, true) == "2P Start: Online", "the hover words Online");
+    check(tray::tipOf(none, false) == "2P Start: Offline", "the hover words Offline");
+    check(tray::tipOf(riley, true) == "Invite from Riley", "the hover words name the first invite");
+    check(tray::lineOf(riley[0]) == "Invite from Riley: Burnout 3", "the menu's line has the game");
+    check(tray::lineOf(riley[1]) == "Invite from Sam", "with no game, the line alone");
+    std::printf("  the tray says the status\n");
+}
+
+// What GitHub says of the latest release, and which version is newer (updates.h).
+void updatesAreRead() {
+    const auto r = updates::read(
+        R"({"tag_name": "v0.2.0", "html_url": "https://github.com/MMagTech/cabinet-linkup-guest/releases/tag/v0.2.0"})");
+    check(r && r->version == "0.2.0", "the tag is the version, with no v");
+    check(r && r->page == "https://github.com/MMagTech/cabinet-linkup-guest/releases/tag/v0.2.0", "the page is kept");
+    check(!updates::read(R"({"tag_name": "v0.2.0", "html_url": "https://example.org/x"})"),
+          "a page anywhere but GitHub is not opened");
+    check(!updates::read("{ not json"), "a broken answer is no release");
+    check(!updates::read(R"({"message": "Not Found"})"), "an answer with no tag is no release");
+    check(updates::newer("0.2.0", "0.1.0"), "0.2.0 comes after 0.1.0");
+    check(updates::newer("0.10.0", "0.9.3"), "numbers, not letters: 0.10 comes after 0.9");
+    check(updates::newer("1.0", "0.9.9"), "a shorter version can be newer");
+    check(!updates::newer("0.1.0", "0.1.0"), "the same version is not newer");
+    check(!updates::newer("0.1", "0.1.0"), "0.1 is 0.1.0");
+    check(!updates::newer("0.1.0", "0.2.0"), "an older one is not newer");
+    std::printf("  updates are read\n");
+}
+
 }  // namespace
 
 int main() {
@@ -467,6 +508,8 @@ int main() {
     startupIsTheComputersOwn(rootText);
     friendsAndInvitesAreRead();
     theRelayIsWrittenForWebrtcbin();
+    theTraySaysTheStatus();
+    updatesAreRead();
 
     std::filesystem::remove_all(root, ignored);
     if (failures > 0) {

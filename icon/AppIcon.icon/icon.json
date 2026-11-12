@@ -1,0 +1,29 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.22745,0.13333,0.40784,1.00000",
+      "srgb:0.03529,0.02353,0.07843,1.00000"
+    ],
+    "orientation" : {
+      "start" : { "x" : 0.5, "y" : 0 },
+      "stop" : { "x" : 0.5, "y" : 0.7 }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "cabinet.png",
+          "name" : "cabinet"
+        }
+      ],
+      "shadow" : { "kind" : "none", "opacity" : 0 },
+      "specular" : false,
+      "translucency" : { "enabled" : false, "value" : 0 }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [ "macOS" ]
+  }
+}

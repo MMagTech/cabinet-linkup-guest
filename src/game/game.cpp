@@ -36,22 +36,32 @@ constexpr int64_t kBeatMs = 250;
 constexpr int64_t kDropMs = 2000;
 constexpr int64_t kConnectLimitMs = 30000;
 
-// A copy of the app with GStreamer beside it, as the Windows zip has it: its own plugins and no
-// others from elsewhere on the computer, kept in a registry of their own. Elsewhere, and in a build
-// on the computer it was built on, GStreamer is the one installed.
+// A copy of the app with GStreamer beside it, as the Windows zip and the Mac app have it: its own
+// plugins and no others from elsewhere on the computer, kept in a registry of their own, read in the
+// app itself, which has no helper beside it for that. Elsewhere, and in a build on the computer it
+// was built on, GStreamer is the one installed.
+//
+//   Windows   lib\gstreamer-1.0 beside the program
+//   Mac       Contents/Library/gstreamer-1.0 in the app, beside Resources, which is SDL's base there
 void useGStreamerBeside() {
-#ifdef _WIN32
     const char* base = SDL_GetBasePath();
     if (!base) return;
+#ifdef _WIN32
     const std::string plugins = std::string(base) + "lib\\gstreamer-1.0";
+#else
+    const std::string plugins = std::string(base) + "../Library/gstreamer-1.0";
+#endif
     if (!g_file_test(plugins.c_str(), G_FILE_TEST_IS_DIR)) return;
     g_setenv("GST_PLUGIN_SYSTEM_PATH_1_0", plugins.c_str(), TRUE);
     g_unsetenv("GST_PLUGIN_PATH_1_0");
     g_unsetenv("GST_PLUGIN_PATH");
-    // Read in the app itself, which has no helper beside it for that.
     g_setenv("GST_REGISTRY_FORK", "no", TRUE);
-    const std::string registry = std::string(g_get_user_cache_dir()) + "\\gstreamer-1.0\\cabinetos-2p-start.bin";
-    g_setenv("GST_REGISTRY_1_0", registry.c_str(), TRUE);
+    char* registry = g_build_filename(g_get_user_cache_dir(), "gstreamer-1.0", "cabinetos-2p-start.bin", nullptr);
+    g_setenv("GST_REGISTRY_1_0", registry, TRUE);
+    g_free(registry);
+#ifdef __APPLE__
+    // GLib's own modules, which an installed GStreamer keeps beside it, are none of the app's.
+    g_setenv("GIO_MODULE_DIR", plugins.c_str(), TRUE);
 #endif
 }
 

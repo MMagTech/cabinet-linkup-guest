@@ -25,10 +25,8 @@ and the games. They just press Start.
 - [x] The screens, as a gallery
 - [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
 - [x] Picture, sound and a controller on macOS
-- [ ] The same on Windows
-- [ ] A Windows package
-
-Windows comes first, then macOS.
+- [x] The Mac app, in a DMG, with its menu bar icon
+- [ ] The same on Windows, with its zip and its tray: built by CI, not yet run on a PC
 
 ## How it is built
 
@@ -50,13 +48,23 @@ git submodule update --init
 cmake --preset default && cmake --build --preset default && ctest --preset default
 ```
 
-`-DTWOPSTART_GAME=OFF` builds everything but the game, with no GStreamer.
+`-DTWOPSTART_GAME=OFF` builds everything but the game, with no GStreamer. With the game, the app uses
+GStreamer's own OpenSSL, on a Mac as on Windows; Homebrew's is for a build without it.
+
+The Mac app as friends get it takes vcpkg, with `VCPKG_ROOT` set, in place of Homebrew's libraries:
+`cmake --preset mac && cmake --build --preset mac`, then `cmake --install build-mac --prefix <folder>`
+makes `2P Start.app` there, for Apple silicon and macOS 13 or later: the app, its font, and only the
+parts of GStreamer a game uses, so it runs on a Mac with nothing installed.
+`ci/mac-package.sh` puts it in a DMG. Each CI run keeps the DMG as `2pstart-mac`.
 
 On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28.8's own installer, whose OpenSSL
 the app uses. [The workflow](.github/workflows/build.yml) is the worked example. After the build,
 `cmake --install build --config Release --prefix <folder>` makes the folder the Windows zip holds: the
 app, its font, only the parts of GStreamer a game uses, and Microsoft's C++ runtime, so it runs on a
 PC with nothing installed. Each CI run on Windows keeps that folder as `2pstart-windows`.
+
+A tag `v<version>`, the version in `CMakeLists.txt`, makes a draft release with both, and the words
+in `ci/release-notes.md`. Neither is signed.
 
 The picture is decoded by the computer's graphics chip: VideoToolbox on a Mac, Direct3D 11 on
 Windows. Nearly every Mac and PC has one for H.264, and most from about 2016 on for H.265, which
@@ -71,8 +79,13 @@ opened with no terminal, what it says as it runs goes to `2pstart.log` in its fo
 `TWOPSTART_H264=1` set, it asks the host for H.264 only, to try the two side by side.
 
 The close button leaves it running, so invites still reach the friend: in the tray on Windows, in
-the Dock on a Mac. Startup, in Settings, opens it at login with no window (`--startup`). Friends see
-it Offline after 15 minutes with nobody at the computer, as they would a console.
+the menu bar on a Mac, whose icon has a dot, green for Online and amber for an invite, and a menu of
+its own. Settings, System: Keep running, which Off makes the close button quit; Startup, which opens
+it at login with no window (`--startup`); and Check for updates, which asks GitHub for the newest
+release, by itself a minute after it opens and then each day. Friends see it Offline after 15
+minutes with nobody at the computer, as they would a console.
+
+Every icon is drawn by [icon/make.swift](icon/make.swift): `swift icon/make.swift icon`.
 
 `2pstart-gallery` shows every screen with made-up friends, before any of it is wired to a server:
 Left and Right step through them. `2pstart-gallery --shots <folder>` saves a picture of each.
@@ -83,4 +96,5 @@ before there is a window: `pair`, `friends`, `online` and `leave`.
 ## Licence
 
 MIT. See [LICENSE](LICENSE). The font in `assets/fonts` is Noto Sans, under the SIL Open Font
-Licence beside it.
+Licence beside it. Each package carries the licence of every part inside it, in `licenses`, and
+Settings, Credits names them.

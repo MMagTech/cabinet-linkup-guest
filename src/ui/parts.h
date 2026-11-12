@@ -84,6 +84,9 @@ struct Row {
     std::string label;
     std::string value;
     bool dim = false;        // a value nobody has given yet
+    // Nothing to do here right now: dimmed, never focused, and no word on why, as the console's
+    // Disabled row (settings.h; MMagTech: "just gray out the menu option").
+    bool greyed = false;
     bool opens = false;      // it opens something: a chevron at the right
     // One of a few, which Left and Right move: under focus, an arrow either side of the value,
     // faint at the end it cannot pass.

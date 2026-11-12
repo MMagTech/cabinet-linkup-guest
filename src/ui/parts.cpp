@@ -338,12 +338,16 @@ void row(ui::Canvas& c, float x, float y, float w, const Row& r, float focus) {
     const float s = 1.0f + focus * 0.02f;
     const float bw = w * s, bh = kRowHeight * s;
     const float bx = x - (bw - w) * 0.5f, by = y - (bh - kRowHeight) * 0.5f;
-    c.draw(menuButton(bx, by, bw, bh, 18.0f, focus));
+    // A greyed row keeps a fainter surface, so the list still reads as one, and its words at the
+    // console's kSettingsUnbuiltAlpha.
+    const float a = r.greyed ? 0.38f : 1.0f;
+    if (r.greyed) c.draw(Rect{bx, by, bw, bh, 18.0f, Color::white(0.03f)});
+    else c.draw(menuButton(bx, by, bw, bh, 18.0f, focus));
     const TextStyle st = TextStyle::Title3, vs = TextStyle::Callout;
     constexpr float kPad = 32.0f, kArrowGap = 14.0f, kArrowOn = 0.70f, kArrowOff = 0.18f;
     const float labelBase = y + (kRowHeight - c.lineHeight(st)) * 0.5f + c.ascent(st);
     const float valueBase = y + (kRowHeight - c.lineHeight(vs)) * 0.5f + c.ascent(vs);
-    c.text(r.label, x + kPad, labelBase, st, menuLabel(focus));
+    c.text(r.label, x + kPad, labelBase, st, Color::white(menuLabel(focus).a * a));
 
     float right = x + w - kPad;
     // Something that opens: the one arrow the console uses for it (settings.cpp).
@@ -375,7 +379,7 @@ void row(ui::Canvas& c, float x, float y, float w, const Row& r, float focus) {
     else sh.words = c.truncate(r.value, vs, room);
     const float shownW = c.measure(sh.words, vs);
     const float textX = right - shownW;
-    c.text(sh.words, textX, valueBase, vs, Color::white(r.dim ? 0.35f : r.typing ? 0.94f : 0.60f + focus * 0.34f));
+    c.text(sh.words, textX, valueBase, vs, Color::white((r.dim ? 0.35f : r.typing ? 0.94f : 0.60f + focus * 0.34f) * a));
     if (typed && r.line != 0) keepLetters(c, r.line, valueLeft, x + w, r.value, sh, textX, vs);
     // After the last letter, a gap after it; inside the line, on the gap between two.
     if (typed && r.typing)
