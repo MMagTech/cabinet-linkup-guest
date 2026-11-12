@@ -106,6 +106,7 @@ public:
     ~Loop();
 
     std::vector<std::string> lacking();
+    bool h265();
     void begin(Server server);
     void ready(std::vector<std::string> stun, std::string turn, std::string relayReason);
     void signal(int generation, const std::string& details);
@@ -136,6 +137,7 @@ private:
     std::condition_variable startCv_;
     bool started_ = false;
     std::vector<std::string> lacking_;
+    bool h265_ = false;
     GMainLoop* loop_ = nullptr;
 
     std::mutex eventsMu_;
@@ -191,6 +193,7 @@ void Game::Loop::run() {
     useGStreamerBeside();
     gst_init(nullptr, nullptr);
     std::vector<std::string> lacking = Stream::lacking();
+    const bool h265 = Stream::canDecodeH265();
     GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
     tickSource_ = g_timeout_add(
         50,
@@ -203,10 +206,12 @@ void Game::Loop::run() {
         std::lock_guard<std::mutex> lk(startMu_);
         loop_ = loop;
         lacking_ = lacking;
+        h265_ = h265;
         started_ = true;
     }
     startCv_.notify_all();
     for (const std::string& part : lacking) std::fprintf(stderr, "[game] GStreamer lacks %s, which a game needs\n", part.c_str());
+    if (lacking.empty()) std::fprintf(stderr, "[game] ready: %s\n", h265 ? "H.265 and H.264" : "H.264 only");
     g_main_loop_run(loop);
     g_source_remove(tickSource_);
     g_main_loop_unref(loop);
@@ -216,6 +221,12 @@ std::vector<std::string> Game::Loop::lacking() {
     std::unique_lock<std::mutex> lk(startMu_);
     startCv_.wait(lk, [this]() { return started_; });
     return lacking_;
+}
+
+bool Game::Loop::h265() {
+    std::unique_lock<std::mutex> lk(startMu_);
+    startCv_.wait(lk, [this]() { return started_; });
+    return h265_;
 }
 
 void Game::Loop::post(Event e) {
@@ -505,6 +516,7 @@ void Game::Loop::stopSession(bool bye) {
 Game::Game(std::function<void()> wake) : loop_(std::make_unique<Loop>(std::move(wake))) {}
 Game::~Game() = default;
 bool Game::canPlay() { return loop_->lacking().empty(); }
+bool Game::canPlayH265() { return canPlay() && loop_->h265(); }
 std::vector<std::string> Game::lacking() { return loop_->lacking(); }
 std::vector<std::string> Game::unloadable() {
     loop_->lacking();

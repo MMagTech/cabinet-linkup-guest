@@ -10,7 +10,8 @@
 // watchdog asking the host for a full picture while packets arrive and no picture comes out.
 //
 // WHAT IS THIS APP'S: the decoder is the computer's own, VideoToolbox on a Mac and Direct3D 11 on
-// Windows, and the picture is kept in memory, the newest only, for the window to draw (Pictures).
+// Windows, for H.265 where the chip has it and H.264 otherwise, as the host is told in the hello
+// (link.cpp); and the picture is kept in memory, the newest only, for the window to draw (Pictures).
 // The colours are BT.601 limited range, as the console states after its decoder; the window's
 // texture says so (app.cpp).
 
@@ -67,6 +68,8 @@ public:
     // What a stream needs that GStreamer does not have, by name: empty when it can play. The decoder
     // is among them, so a computer that cannot decode H.264 in its graphics chip lacks it.
     static std::vector<std::string> lacking();
+    // Whether it can decode H.265 too, in the graphics chip (stream_friend.cpp's canDecodeH265).
+    static bool canDecodeH265();
     // GStreamer's plugins that are there but would not load, most likely for a library they need
     // that is not there.
     static std::vector<std::string> unloadable();

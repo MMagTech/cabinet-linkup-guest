@@ -3,6 +3,11 @@
 # What Windows itself has stays out. Anything found elsewhere, or not found, stops the install, so
 # the zip never carries a stray copy from whatever else is on the computer that built it.
 #
+# Paths are read with / between their parts, whichever way Windows writes them.
+if(POLICY CMP0207)
+    cmake_policy(SET CMP0207 NEW)
+endif()
+
 # Given by CMakeLists.txt: TWOPSTART_EXE, TWOPSTART_GST_PLUGINS and TWOPSTART_GST_BIN, and dumpbin
 # as the tool that reads each library's list.
 

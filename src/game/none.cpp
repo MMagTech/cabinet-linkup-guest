@@ -10,6 +10,7 @@ class Game::Loop {};
 Game::Game(std::function<void()>) {}
 Game::~Game() = default;
 bool Game::canPlay() { return false; }
+bool Game::canPlayH265() { return false; }
 std::vector<std::string> Game::lacking() { return {"the game, which this copy was built without"}; }
 std::vector<std::string> Game::unloadable() { return {}; }
 void Game::begin(Server) {}

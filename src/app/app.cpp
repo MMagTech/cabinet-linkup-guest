@@ -1000,7 +1000,7 @@ void App::join(const linkup::Friend& f) {
     session_->plays = game_->canPlay();
     place_ = Place::Game;
     showWaiting(linkup::waitingFor(f.name), f.game);
-    link_->join(f.invite, session_->plays);
+    link_->join(f.invite, session_->plays, session_->plays && game_->canPlayH265());
 }
 
 void App::decline(const linkup::Friend& f) {

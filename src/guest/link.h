@@ -126,8 +126,9 @@ public:
     void rename(const std::string& username);
     void decline(const std::string& invite);
     // cmdJoin. With `play`, a game follows: the hello goes to the host, and Ready comes once the
-    // STUN list and the relay are known. Without it, the session is only opened.
-    void join(const std::string& invite, bool play);
+    // STUN list and the relay are known. Without it, the session is only opened. `h265` says this
+    // computer can decode H.265 as well as H.264.
+    void join(const std::string& invite, bool play, bool h265);
     // Connection details for the host, under the connection's `generation` (sendSignal).
     void signal(int generation, const std::string& details);
     // How the game connected, for the server's count: `path` direct, relay or failed (PROTOCOL.md).

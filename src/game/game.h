@@ -76,6 +76,9 @@ public:
     // Whether this computer can play: GStreamer has webrtcbin and everything a stream needs, the
     // graphics chip's H.264 decoder included. Waits for GStreamer to start, the first time.
     bool canPlay();
+    // Whether it can take the host's picture as H.265 as well, a clearer one for the same data: the
+    // graphics chip decodes it.
+    bool canPlayH265();
     // What it lacks, by GStreamer's names, and GStreamer's plugins that would not load: for
     // --check-game.
     std::vector<std::string> lacking();

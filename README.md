@@ -59,7 +59,9 @@ app, its font, only the parts of GStreamer a game uses, and Microsoft's C++ runt
 PC with nothing installed. Each CI run on Windows keeps that folder as `2pstart-windows`.
 
 The picture is decoded by the computer's graphics chip: VideoToolbox on a Mac, Direct3D 11 on
-Windows. Nearly every Mac and PC has one for H.264. There is no decoder in software.
+Windows. Nearly every Mac and PC has one for H.264, and most from about 2016 on for H.265, which
+the host then sends, as to a console: a clearer picture for the same data. There is no decoder in
+software.
 
 `2pstart` is the app. It opens a window, pairs on first run and keeps what it holds in a folder of
 its own; `--folder <path>` keeps it somewhere else instead, to try it as a second friend.

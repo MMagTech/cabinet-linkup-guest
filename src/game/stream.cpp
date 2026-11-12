@@ -3,6 +3,10 @@
 
 #include "game/stream.h"
 
+#ifdef __APPLE__
+#include <VideoToolbox/VideoToolbox.h>
+#endif
+
 #include <cstdio>
 #include <cstring>
 
@@ -21,15 +25,20 @@ bool hasElement(const char* name) {
 }
 
 // The computer's own decoder, its graphics chip's: VideoToolbox on a Mac, Direct3D 11 on Windows,
-// which nearly every Mac and PC has for H.264. There is no other: one in software would bring
-// ffmpeg into the app.
+// which nearly every Mac and PC has for H.264, and most from about 2016 on for H.265. There is no
+// other: one in software would bring ffmpeg into the app.
 #ifdef _WIN32
 constexpr const char* kDecoder = "d3d11h264dec";
+constexpr const char* kDecoderH265 = "d3d11h265dec";   // there only when the chip decodes H.265
 #else
 constexpr const char* kDecoder = "vtdec";
+constexpr const char* kDecoderH265 = "vtdec";
 #endif
 
-std::string decoder() { return hasElement(kDecoder) ? kDecoder : ""; }
+std::string decoderFor(bool h265) {
+    const char* name = h265 ? kDecoderH265 : kDecoder;
+    return hasElement(name) ? name : "";
+}
 
 }  // namespace
 
@@ -85,6 +94,15 @@ void Pictures::clear() {
 
 // ---- The stream ----------------------------------------------------------------
 
+// stream_friend.cpp's canDecodeH265.
+bool Stream::canDecodeH265() {
+#ifdef __APPLE__
+    // VideoToolbox takes H.265 on every Mac, but only the chip's own is fast enough.
+    if (!VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) return false;
+#endif
+    return !decoderFor(true).empty() && hasElement("rtph265depay") && hasElement("h265parse");
+}
+
 std::vector<std::string> Stream::lacking() {
     // webrtcbin and what it makes inside it: the connection (nice), what locks it (dtls, srtp), the
     // data channels (sctp), and the packets' order, resends and repairs (rtpmanager, rtp). Then the
@@ -92,7 +110,8 @@ std::vector<std::string> Stream::lacking() {
     static const char* const kParts[] = {
         "webrtcbin", "nicesrc", "nicesink", "dtlssrtpenc", "dtlssrtpdec", "srtpenc", "srtpdec", "sctpenc",
         "sctpdec", "rtpbin", "rtpfunnel", "rtprtxreceive", "rtpulpfecdec", "rtpreddec", "rtph264depay",
-        "h264parse", kDecoder, "queue", "appsink", "rtpopusdepay", "opusdec", "capsfilter",
+        "h264parse", kDecoder, "rtph265depay", "h265parse", "queue", "appsink", "rtpopusdepay", "opusdec",
+        "capsfilter",
     };
     std::vector<std::string> out;
     for (const char* part : kParts)
@@ -172,17 +191,20 @@ void Stream::onPadAdded(GstElement*, GstPad* pad, gpointer self) {
     const gchar* media = gst_structure_get_string(s, "media");
     const gchar* encoding = gst_structure_get_string(s, "encoding-name");
     const bool video = media && std::strcmp(media, "video") == 0;
+    const bool h265 = encoding && std::strcmp(encoding, "H265") == 0;
     std::string description;
     if (video) {
-        const std::string dec = decoder();
-        if (dec.empty() || !encoding || std::strcmp(encoding, "H264") != 0) {
+        const std::string dec = decoderFor(h265);
+        if (dec.empty() || !encoding || (!h265 && std::strcmp(encoding, "H264") != 0)) {
             std::fprintf(stderr, "[game] no decoder for that picture\n");
             gst_caps_unref(caps);
             return;
         }
-        description = "rtph264depay name=depay request-keyframe=true wait-for-keyframe=true ! h264parse ! " + dec +
-                      " name=dec ! queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream ! "
-                      "appsink name=picture caps=video/x-raw,format=NV12 sync=false max-buffers=1 drop=true";
+        std::fprintf(stderr, "[game] the picture is %s, through %s\n", h265 ? "H.265" : "H.264", dec.c_str());
+        description = std::string(h265 ? "rtph265depay name=depay request-keyframe=true wait-for-keyframe=true ! h265parse ! "
+                                       : "rtph264depay name=depay request-keyframe=true wait-for-keyframe=true ! h264parse ! ") +
+                      dec + " name=dec ! queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream ! "
+                            "appsink name=picture caps=video/x-raw,format=NV12 sync=false max-buffers=1 drop=true";
     } else {
         guint ssrc = 0;
         if (gst_structure_get_uint(s, "ssrc", &ssrc)) me->cushionSound(ssrc);
