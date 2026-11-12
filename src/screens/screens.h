@@ -53,6 +53,7 @@ struct FirstRunView {
     std::string address, code, name;
     int focus = 0;         // 0 to 2 the lines, 3 Connect
     size_t caret = std::string::npos;   // in the focused line, in bytes; past the end is the end
+    parts::Span selected = {};          // in the focused line
     bool connecting = false;
     float clock = 0.0f;
     float still = 0.0f;    // seconds since the last key, for the caret
@@ -66,6 +67,7 @@ struct SettingsView {
     std::string name;          // as friends see you
     bool typingName = false;   // the name is being typed: a caret in it
     size_t caret = std::string::npos;   // in bytes; past the end is the end
+    parts::Span selected = {};
     float still = 0.0f;        // seconds since the last key, for the caret
     int colour = 0;            // one of look's sixteen
     bool fullScreen = true;

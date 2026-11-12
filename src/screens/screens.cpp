@@ -290,6 +290,7 @@ void drawFirstRun(ui::Canvas& c, const FirstRunView& v) {
         r.dim = value.empty();
         r.typing = on;
         r.caret = v.caret;
+        r.selected = v.selected;
         r.still = v.still;
         r.line = parts::spot::kItem + i;
         const float y = kTop + static_cast<float>(i) * pitch;
@@ -345,6 +346,7 @@ parts::Row settingRow(setting::Row id, const SettingsView& v) {
             parts::Row r{"Username", v.name};
             r.typing = v.typingName;
             r.caret = v.caret;
+            r.selected = v.selected;
             r.line = parts::spot::kItem + setting::Name;
             return r;
         }

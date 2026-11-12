@@ -132,6 +132,12 @@ float gapX(ui::Canvas& c, const std::string& s, const Shown& sh, size_t at, floa
     return x + c.measure(std::string(sh.cutStart ? kEllipsis : "") + s.substr(sh.from, at - sh.from), st);
 }
 
+// The chosen letters of a line that are drawn, behind them: what is chosen off either end is not.
+void chosen(ui::Canvas& c, const std::string& s, const Shown& sh, Span span, float x, float baseline, TextStyle st) {
+    const size_t from = std::max(onEdge(s, span.from), sh.from), to = std::min(onEdge(s, span.to), sh.to);
+    if (from < to) selection(c, gapX(c, s, sh, from, x, st), gapX(c, s, sh, to, x, st), baseline, st);
+}
+
 // Each gap between the letters drawn, kept under the line's spot for a click (Canvas::letters).
 void keepLetters(ui::Canvas& c, int id, float left, float right, const std::string& s, const Shown& sh, float x,
                  TextStyle st) {
@@ -375,10 +381,12 @@ void row(ui::Canvas& c, float x, float y, float w, const Row& r, float focus) {
     else sh.words = c.truncate(r.value, vs, room);
     const float shownW = c.measure(sh.words, vs);
     const float textX = right - shownW;
+    const bool choosing = typed && r.typing && !r.selected.empty();
+    if (choosing) chosen(c, r.value, sh, r.selected, textX, valueBase, vs);
     c.text(sh.words, textX, valueBase, vs, Color::white(r.dim ? 0.35f : r.typing ? 0.94f : 0.60f + focus * 0.34f));
     if (typed && r.line != 0) keepLetters(c, r.line, valueLeft, x + w, r.value, sh, textX, vs);
     // After the last letter, a gap after it; inside the line, on the gap between two.
-    if (typed && r.typing)
+    if (typed && r.typing && !choosing)
         caret(c, at >= r.value.size() ? right + kCaretRoom * 0.5f : gapX(c, r.value, sh, at, textX, vs), valueBase, vs,
               r.still);
     if (arrows) {
@@ -401,6 +409,14 @@ void caret(ui::Canvas& c, float x, float baseline, TextStyle st, float still) {
     cyan.a *= on;
     const float capH = c.capHeight(st);
     c.draw(Rect{x - kCaretW * 0.5f, baseline - capH - kOver, kCaretW, capH + kOver + kUnder, 1.5f, cyan});
+}
+
+void selection(ui::Canvas& c, float x, float right, float baseline, TextStyle st) {
+    constexpr float kOver = 5.0f, kUnder = 8.0f, kRadius = 4.0f, kTint = 0.38f;
+    Color cyan = ui::palette::kScreenCyan;
+    cyan.a *= kTint;
+    const float capH = c.capHeight(st);
+    c.draw(Rect{x, baseline - capH - kOver, right - x, capH + kOver + kUnder, kRadius, cyan});
 }
 
 void fieldPanel(ui::Canvas& c, const FieldPanel& p) {
@@ -439,10 +455,12 @@ void fieldPanel(ui::Canvas& c, const FieldPanel& p) {
     Shown sh;
     if (empty) sh.words = p.placeholder;
     else sh = shownOf(c, p.value, at, st, fieldW - 56.0f);
+    const bool choosing = !empty && !p.selected.empty();
+    if (choosing) chosen(c, p.value, sh, p.selected, textX, base, st);
     c.text(sh.words, textX, base, st, empty ? Color::white(0.35f) : Color::white(1.0f));
     if (!empty) {
         keepLetters(c, spot::kField, field.x, field.x + field.w, p.value, sh, textX, st);
-        caret(c, gapX(c, p.value, sh, at, textX, st), base, st, p.still);
+        if (!choosing) caret(c, gapX(c, p.value, sh, at, textX, st), base, st, p.still);
     }
     y += kFieldH + kGap;
     pressPrompt(c, p.prompt, W * 0.5f, y + kPromptH * 0.5f + c.ascent(st) * 0.40f, 1.0f);

@@ -273,6 +273,18 @@ std::vector<Scene> scenes() {
              v.clock = v.still = t;
              screens::drawFirstRun(c, v);
          }},
+        // Letters chosen, by a drag, a double-click or Shift with the arrows: the console has none.
+        {"29c-first-run-selection", "First run, a group of the code chosen",
+         [](ui::Canvas& c, float t) {
+             screens::FirstRunView v;
+             v.address = kAddress;
+             v.code = "K7MR-4QXT-9HPV";
+             v.selected = {5, 9};   // "4QXT"
+             v.caret = 9;
+             v.focus = 1;
+             v.clock = v.still = t;
+             screens::drawFirstRun(c, v);
+         }},
         {"30-first-run-refused", "First run, the server refused",
          [](ui::Canvas& c, float t) {
              firstRun(c, t, 3, true);
@@ -311,6 +323,16 @@ std::vector<Scene> scenes() {
              v.name = "alex_on_pc";
              v.typingName = true;
              v.caret = 4;   // after "alex"
+             v.still = t;
+             screens::drawSettings(c, v);
+         }},
+        {"36b-settings-name-selection", "Settings, all of the name chosen",
+         [](ui::Canvas& c, float t) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kLinkUp, 0);
+             v.name = "alex_on_pc";
+             v.typingName = true;
+             v.selected = {0, 10};
+             v.caret = 10;
              v.still = t;
              screens::drawSettings(c, v);
          }},
@@ -365,6 +387,19 @@ std::vector<Scene> scenes() {
              p.placeholder = "name.example.net:7845";
              p.still = t;
              p.prompt = parts::prompt(parts::Hands::Keyboard, false, "to continue");
+             parts::fieldPanel(c, p);
+         }},
+        {"42b-change-server-selection", "Change server: a word of the address chosen",
+         [](ui::Canvas& c, float t) {
+             settings(c, look::Colour::Purple, kLinkUp, 1);
+             parts::FieldPanel p;
+             p.title = "Server address";
+             p.value = kAddress;
+             p.selected = {7, 14};   // "example"
+             p.caret = 14;
+             p.placeholder = "name.example.net:7845";
+             p.still = t;
+             p.prompt = parts::prompt(parts::Hands::Mouse, false, "to continue");
              parts::fieldPanel(c, p);
          }},
         {"43-change-server-code", "Change server: another server's code",
