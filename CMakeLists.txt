@@ -178,6 +178,7 @@ endif()
 # which are the console's own file, so the app says what the console says.
 add_library(screens STATIC
     src/ui/draw.cpp
+    src/ui/glow.cpp
     src/ui/look.cpp
     src/ui/parts.cpp
     src/screens/screens.cpp

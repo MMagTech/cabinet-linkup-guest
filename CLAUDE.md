@@ -16,7 +16,7 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 | `src/guest/` | 2P Start's own: who the friend is to a server, where the app keeps its folder and settings, and the friend's side of the server (`link`), a game's half of it included, with no window |
 | `src/game/` | A game: the friend's side of the connection on a thread of its own (`game`), the stream with its picture (`stream`) and its sound at the host's pace (`sound`), with no window. GStreamer from its own installer; the picture decoded by the graphics chip, VideoToolbox on a Mac and Direct3D 11 on Windows. `none.cpp` stands in for a build without it (`-DTWOPSTART_GAME=OFF`) |
 | `src/pipewire/` | The one piece of PipeWire the console's sound queue uses, its ring buffer, as `src/win/` stands in for Windows |
-| `src/ui/` | What every screen is drawn with: rounded shapes and words on the console's 1920 by 1080 canvas (`draw`), the console's sixteen colours (`look`), and the parts screens share (`parts`). The numbers are the console's |
+| `src/ui/` | What every screen is drawn with: rounded shapes and words on the console's 1920 by 1080 canvas (`draw`), the console's sixteen colours (`look`), the parts screens share (`parts`), and the bars and glow around a host's game (`glow`). The numbers are the console's |
 | `src/screens/` | Each screen, given what to show. None knows a server, a stream or a controller |
 | `src/gallery/` | `2pstart-gallery`: every screen with made-up friends, in a window or as pictures |
 | `src/app/` | `2pstart`, the app: its window, what each press does, a game in it (`session.cpp`), and the three kinds of hands turned into the console's moves |

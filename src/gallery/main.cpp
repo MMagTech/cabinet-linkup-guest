@@ -154,6 +154,13 @@ std::vector<Scene> scenes() {
          }},
         {"09-waiting", "Waiting for the host", [](ui::Canvas& c, float t) { waiting(c, t, linkup::waitingFor(kHost), kGame); }},
         {"10-game", "The game", [](ui::Canvas& c, float t) { screens::drawPictureStandIn(c, kGame, t); }},
+        // A game narrower than the screen, where the host said where it sits: the bars and the glow
+        // drawn here, over the stream's own (ui/glow.h).
+        {"10a-game-bars", "The game, its bars and glow drawn here",
+         [](ui::Canvas& c, float t) {
+             screens::drawPictureStandIn(c, kGame, t);
+             c.glow(c.onOutput(), SDL_FRect{240.0f, 0.0f, 1440.0f, 1080.0f});
+         }},
         {"11-host-paused", "The host paused",
          [](ui::Canvas& c, float t) { waiting(c, t, linkup::pausedBy(kHost), kGame); }},
         {"12-paused-here", "You paused",

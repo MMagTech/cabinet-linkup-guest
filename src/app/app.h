@@ -17,6 +17,8 @@
 
 #include <SDL3/SDL.h>
 
+struct json_object;
+
 #include "app/idle.h"
 #include "app/input.h"
 #include "app/notice.h"
@@ -111,6 +113,7 @@ private:
     bool takeGameEvent(const SDL_Event& e);
     void moveInGame(moves::Move m);
     void fromPeer(const std::string& word, const std::string& game);
+    void tookPlace(json_object* message);
     void connected();
     void connectFailed(const std::string& reason);
     void friendPicture(bool on);
@@ -241,6 +244,9 @@ private:
         std::string title;            // what Waiting and Reconnecting say
         std::string under;            // the game, under it
         bool resumes = false;         // the host paused, and either can resume
+        // Where the host's game sits on its screen, in canvas points, as it last said (#692): the
+        // bars and the glow around it are drawn here. None from an older host.
+        std::optional<SDL_FRect> place;
         linkupwire::Pad sent;
         uint16_t seq = 0;
         float padAge = 0.0f;

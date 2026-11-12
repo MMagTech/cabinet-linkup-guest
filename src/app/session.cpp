@@ -52,7 +52,8 @@ void App::fromGame() {
             case Kind::Peer: {
                 json_object* p = jsonutil::parse(e.text);
                 if (!p) break;
-                fromPeer(jsonutil::str(p, "t"), jsonutil::str(p, "game"));
+                if (jsonutil::str(p, "t") == "place") tookPlace(p);
+                else fromPeer(jsonutil::str(p, "t"), jsonutil::str(p, "game"));
                 json_object_put(p);
                 break;
             }
@@ -114,16 +115,35 @@ void App::fromPeer(const std::string& word, const std::string& game) {
         s.resumes = false;
         if (!s.pausedHere && !s.showsPicture) showWaiting(linkup::waitingFor(s.host), s.game);
     } else if (word == "starting") {
-        // With its name: a session's next game is not the one the invite named.
+        // With its name: a session's next game is not the one the invite named. Where it sits is
+        // said again when it shows.
         if (!game.empty()) s.game = game;
+        s.place.reset();
         showWaiting(linkup::waitingFor(s.host), s.game);
     } else if (word == "quit") {
+        s.place.reset();
         showWaiting(linkup::waitingFor(s.host), "");
     } else if (word == "ended") {
         peerEndedSession();
     } else if (word == "idle") {
         idlePause();
     }
+}
+
+// linkupTookPlace: the host's word on where its game sits, so the bars and the glow around it are
+// drawn here, smooth (ui/glow.h). An older host never says, and the stream's own bars stay.
+void App::tookPlace(json_object* message) {
+    float v[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const char* names[4] = {"x", "y", "w", "h"};
+    for (int i = 0; i < 4; ++i) {
+        json_object* n = nullptr;
+        if (!json_object_object_get_ex(message, names[i], &n)) return;
+        v[i] = static_cast<float>(json_object_get_double(n));
+    }
+    const SDL_FRect place{v[0], v[1], v[2], v[3]};
+    if (!session_->place || std::memcmp(&*session_->place, &place, sizeof place) != 0)
+        std::fprintf(stderr, "[game] the host's game sits at %.0f,%.0f, %.0f by %.0f\n", place.x, place.y, place.w, place.h);
+    session_->place = place;
 }
 
 // linkupIdlePause, the friend's side: the host's clock said ten minutes with no press from either.
@@ -417,7 +437,8 @@ void App::takePicture() {
     });
 }
 
-// The host's picture, as large as the window allows, its shape kept, black around it.
+// The host's picture, as large as the window allows, its shape kept, black around it; and where the
+// host said its game sits, the bars and the glow around that, drawn here (ui/glow.h).
 void App::drawPicture() {
     if (!picture_) return;
     int ow = 0, oh = 0;
@@ -428,4 +449,5 @@ void App::drawPicture() {
     const float scale = std::min(static_cast<float>(ow) / w, static_cast<float>(oh) / h);
     SDL_FRect at{(static_cast<float>(ow) - w * scale) * 0.5f, (static_cast<float>(oh) - h * scale) * 0.5f, w * scale, h * scale};
     SDL_RenderTexture(renderer_, picture_, nullptr, &at);
+    if (session_ && session_->place) canvas_.glow(at, *session_->place);
 }
