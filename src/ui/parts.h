@@ -36,6 +36,7 @@ constexpr int kItem = 3000;      // + a tile, a row, or first run's lines and Co
 constexpr int kOption = 4000;    // + a panel's answer or line
 constexpr int kField = 5000;     // a line being typed in a panel
 constexpr int kPanel = 6000;     // a panel itself: a click on it is not a click outside it
+constexpr int kCategory = 7000;  // + one of Settings' categories
 }  // namespace spot
 
 // What the person last touched, so a prompt names what they have in their hands.

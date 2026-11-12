@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <vector>
+
 namespace moves {
 
 // What a controller, the keys or the mouse asked for. A press is A, Enter or a click; Back is B, Esc
@@ -26,8 +28,21 @@ struct Step {
 constexpr int kColumns = 4;
 Step friends(int focus, int tiles, Move m);
 
-// A column of rows, top to bottom. Up from the top goes into the top bar when there is one.
-Step column(int focus, int count, Move m, bool bar);
+// A column of rows, top to bottom: first run's lines and a panel's.
+Step column(int focus, int count, Move m);
+
+// Settings, as the console's (SettingsScreen::key in settings.cpp): its categories down the left,
+// the chosen one's rows beside them. `row` -1 is the list, where the category with the focus is the
+// one whose rows show. Up off the first category is the bar; Right or A goes into the rows, on the
+// first that takes focus; Back goes back. In the rows, Up and Down pass over what takes no focus and
+// stop at the ends, Left and Back come back out to the list, and A presses. A choice row's Left and
+// Right are the app's: it steps the row. `focusable` says, for each category, which rows take focus.
+struct SettingsStep {
+    int category = 0;
+    int row = -1;
+    Step::Then then = Step::Then::Edge;
+};
+SettingsStep settings(int category, int row, const std::vector<std::vector<bool>>& focusable, Move m);
 
 // The top bar's two places. Left and Right switch the screen, as the console's do; Down, A and Back
 // all go back down into the screen, when it has something to focus.

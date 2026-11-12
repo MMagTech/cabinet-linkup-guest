@@ -139,6 +139,7 @@ private:
     void moveOnFirstRun(moves::Move m);
     void moveOnOverlay(moves::Move m);
     void pressFriend();
+    screens::setting::Row settingAtFocus() const;
     void pressSetting(int row);
     void stepSetting(int row, int by);
     void switchTo(Place place);
@@ -169,7 +170,6 @@ private:
     void join(const linkup::Friend& f);
     void decline(const linkup::Friend& f);
     void serverPanel();
-    void aboutPanel(int focus);
     void askAddress();
     void askCode(const std::string& address);
     void leave();
@@ -221,7 +221,8 @@ private:
     bool changing_ = false;      // Change server's pairing, from Settings
 
     std::string name_;           // as friends see this one, kept beside the key
-    int settingsFocus_ = 0;
+    int settingsCategory_ = 0;   // whose rows show
+    int settingsRow_ = -1;       // the focused row, by its place in them; -1, the category list
     bool typingName_ = false;
     std::string typedName_;
 

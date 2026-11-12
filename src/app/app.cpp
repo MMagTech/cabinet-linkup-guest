@@ -384,7 +384,9 @@ void App::draw() {
             v.controllers = padNames();
             v.controller = chosenPad();
             v.server = address_;
-            v.focus = settingsFocus_;
+            v.version = TWOPSTART_VERSION;
+            v.category = settingsCategory_;
+            v.focus = settingsRow_;
             v.barFocused = barFocused_;
             screens::drawSettings(canvas_, v);
             break;
@@ -609,7 +611,9 @@ void App::switchTo(Place place) {
         friendFocus_ = tileCount() > 0 ? std::max(friendFocus_, -1) : -1;
         barFocused_ = barFocused_ || tileCount() == 0;
     } else {
-        settingsFocus_ = std::clamp(settingsFocus_, 0, screens::setting::Count - 1);
+        // In on the category list, as the console comes down from its bar.
+        settingsCategory_ = std::clamp(settingsCategory_, 0, static_cast<int>(screens::settingsCategories().size()) - 1);
+        settingsRow_ = -1;
     }
 }
 
@@ -654,19 +658,36 @@ void App::moveOnSettings(Move m) {
         }
         return;
     }
-    if ((m == Move::Left || m == Move::Right) &&
-        (settingsFocus_ == setting::Colour || settingsFocus_ == setting::Controller)) {
-        stepSetting(settingsFocus_, m == Move::Right ? 1 : -1);
+    const setting::Row row = settingAtFocus();
+    if ((m == Move::Left || m == Move::Right) && (row == setting::Colour || row == setting::Controller)) {
+        stepSetting(row, m == Move::Right ? 1 : -1);
         return;
     }
-    const moves::Step s = moves::column(settingsFocus_, setting::Count, m, true);
+    std::vector<std::vector<bool>> focusable;
+    for (const SettingsCategory& cat : settingsCategories()) {
+        focusable.emplace_back();
+        for (const setting::Row r : cat.rows) focusable.back().push_back(settingFocusable(r));
+    }
+    const moves::SettingsStep s = moves::settings(settingsCategory_, settingsRow_, focusable, m);
     switch (s.then) {
-        case Then::Moved: settingsFocus_ = s.focus; break;
+        case Then::Moved:
+            settingsCategory_ = s.category;
+            settingsRow_ = s.row;
+            break;
         case Then::ToBar:
         case Then::Back: barFocused_ = true; break;
-        case Then::Press: pressSetting(settingsFocus_); break;
+        case Then::Press: pressSetting(row); break;
         case Then::Edge: break;
     }
+}
+
+// The row with the focus, or Count on the category list.
+screens::setting::Row App::settingAtFocus() const {
+    const auto& cats = screens::settingsCategories();
+    if (settingsRow_ < 0 || settingsCategory_ < 0 || settingsCategory_ >= static_cast<int>(cats.size()))
+        return screens::setting::Count;
+    const auto& rows = cats[static_cast<size_t>(settingsCategory_)].rows;
+    return settingsRow_ < static_cast<int>(rows.size()) ? rows[static_cast<size_t>(settingsRow_)] : screens::setting::Count;
 }
 
 void App::pressSetting(int row) {
@@ -683,7 +704,11 @@ void App::pressSetting(int row) {
         case setting::FullScreen: setFullScreen(!settings_.fullScreen); break;
         case setting::Startup: setStartup(!settings_.startup); break;
         case setting::Server: serverPanel(); break;
-        case setting::About: aboutPanel(0); break;
+        case setting::HowTo:
+        case setting::Credits:
+            overlay_ = Overlay{};
+            overlay_.kind = row == setting::HowTo ? Overlay::Kind::HowTo : Overlay::Kind::Credits;
+            break;
         default: break;
     }
 }
@@ -710,7 +735,7 @@ void App::stepSetting(int row, int by) {
 
 void App::moveOnFirstRun(Move m) {
     if (first_.connecting) return;
-    const moves::Step s = moves::column(first_.focus, 4, m, false);
+    const moves::Step s = moves::column(first_.focus, 4, m);
     switch (s.then) {
         case Then::Moved:
             first_.focus = s.focus;
@@ -754,7 +779,7 @@ void App::moveOnOverlay(Move m) {
             return;
         }
         const int lines = o.kind == Overlay::Kind::HowTo ? screens::howToCount() : screens::creditCount();
-        const moves::Step s = moves::column(o.panel.focused, lines, m, false);
+        const moves::Step s = moves::column(o.panel.focused, lines, m);
         if (s.then == Then::Moved) {
             o.panel.focused = s.focus;
             o.panel.top = moves::topFor(s.focus, o.panel.top, lines, parts::kPanelRows);
@@ -770,7 +795,7 @@ void App::moveOnOverlay(Move m) {
         }
         return;
     }
-    const moves::Step s = moves::column(o.panel.focused, static_cast<int>(o.panel.options.size()), m, false);
+    const moves::Step s = moves::column(o.panel.focused, static_cast<int>(o.panel.options.size()), m);
     if (s.then == Then::Moved) {
         o.panel.focused = s.focus;
         o.panel.top = moves::topFor(s.focus, o.panel.top, static_cast<int>(o.panel.options.size()), parts::kPanelRows);
@@ -845,6 +870,15 @@ void App::pointAt(float x, float y, bool click) {
             if (click) pressFriend();
             return;
         case Place::Settings: {
+            // On the list, the pointer chooses: the rows beside it follow at once, as the console's do.
+            if (s.id >= spot::kCategory) {
+                if (typingName_ && !click) return;
+                typingName_ = false;
+                settingsCategory_ = s.id - spot::kCategory;
+                settingsRow_ = -1;
+                barFocused_ = false;
+                return;
+            }
             if (s.id < spot::kItem || s.id >= spot::kOption) return;
             const int row = s.id - spot::kItem;
             if (typingName_) {
@@ -855,7 +889,8 @@ void App::pointAt(float x, float y, bool click) {
                 }
                 typingName_ = false;
             }
-            settingsFocus_ = row;
+            const auto& rows = screens::settingsCategories()[static_cast<size_t>(settingsCategory_)].rows;
+            settingsRow_ = static_cast<int>(std::find(rows.begin(), rows.end(), row) - rows.begin());
             barFocused_ = false;
             if (!click) return;
             pressSetting(row);
@@ -1034,22 +1069,6 @@ void App::serverPanel() {
     });
 }
 
-// About, as the console's Settings has it. Version is only read; How to and Credits and licenses
-// open their lists.
-void App::aboutPanel(int focus) {
-    screens::AboutView v;
-    v.version = TWOPSTART_VERSION;
-    v.focus = focus;
-    openPanel(screens::aboutPanel(v), [this](int answer) {
-        if (answer == 0) {
-            aboutPanel(0);
-        } else if (answer == 1 || answer == 2) {
-            overlay_ = Overlay{};
-            overlay_.kind = answer == 1 ? Overlay::Kind::HowTo : Overlay::Kind::Credits;
-        }
-    });
-}
-
 // linkupRetypeAddress.
 void App::askAddress() {
     overlay_ = Overlay{};
@@ -1110,7 +1129,8 @@ void App::toFirstRun() {
     // The name stays: it is the friend's own, whichever server.
     first_.name = name_;
     caretToEnd();
-    settingsFocus_ = 0;
+    settingsCategory_ = 0;
+    settingsRow_ = -1;
 }
 
 void App::openPanel(parts::Panel p, std::function<void(int)> then) {
