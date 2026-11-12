@@ -135,8 +135,9 @@ public:
     // A line's letters, recorded as it is drawn, and cleared with the spots.
     void letters(Letters l) { letters_.push_back(std::move(l)); }
     // Where a click at `x` on spot `id` puts the caret: the nearest gap, in bytes. Nothing when the
-    // spot is not a line being typed into, or `x` is not on its letters.
-    std::optional<size_t> caretAt(int id, float x) const;
+    // spot is not a line being typed into, or `x` is not on its letters, unless `anywhere`: a drag
+    // past either end of them.
+    std::optional<size_t> caretAt(int id, float x, bool anywhere = false) const;
 
     void setLook(const Look& look) { look_ = look; }
     Color surface() const { return look_.surface; }
