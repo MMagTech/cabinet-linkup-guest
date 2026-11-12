@@ -79,6 +79,12 @@ private:
     static void onNewTransceiver(GstElement*, GstWebRTCRTPTransceiver* t, gpointer self);
     static void onNewJitterbuffer(GstElement*, GstElement* jitterbuffer, guint session, guint ssrc, gpointer self);
     void cushionSound(guint ssrc);
+    // The picture's jitter buffer's count: packets in, lost for good, come too late, and resends
+    // asked for and those that came.
+    struct Losses {
+        guint64 in = 0, lost = 0, late = 0, resent = 0, resentCame = 0;
+    };
+    Losses pictureLosses();
     static gboolean onBus(GstBus*, GstMessage* m, gpointer self);
     static GstPadProbeReturn onPacket(GstPad*, GstPadProbeInfo*, gpointer self);
     static GstPadProbeReturn onPicture(GstPad*, GstPadProbeInfo*, gpointer self);
@@ -99,6 +105,8 @@ private:
     std::atomic<int64_t> lastPacketMs_{0};
     std::atomic<int64_t> lastPictureMs_{0};
     int64_t lastAskMs_ = 0;
+    int64_t startedMs_ = 0;
+    std::atomic<guint> pictureSsrc_{0};
     std::atomic<uint32_t> decoded_{0};
     uint32_t asks_ = 0;
     Sound sound_;

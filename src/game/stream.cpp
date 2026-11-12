@@ -96,6 +96,8 @@ void Pictures::clear() {
 
 // stream_friend.cpp's canDecodeH265.
 bool Stream::canDecodeH265() {
+    // For trying the two side by side: TWOPSTART_H264=1 says H.264 only.
+    if (g_getenv("TWOPSTART_H264")) return false;
 #ifdef __APPLE__
     // VideoToolbox takes H.265 on every Mac, but only the chip's own is fast enough.
     if (!VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) return false;
@@ -194,6 +196,8 @@ void Stream::onPadAdded(GstElement*, GstPad* pad, gpointer self) {
     const bool h265 = encoding && std::strcmp(encoding, "H265") == 0;
     std::string description;
     if (video) {
+        guint ssrc = 0;
+        if (gst_structure_get_uint(s, "ssrc", &ssrc)) me->pictureSsrc_ = ssrc;
         const std::string dec = decoderFor(h265);
         if (dec.empty() || !encoding || (!h265 && std::strcmp(encoding, "H264") != 0)) {
             std::fprintf(stderr, "[game] no decoder for that picture\n");
@@ -275,6 +279,23 @@ void Stream::cushionSound(guint ssrc) {
     g_object_set(it->second, "latency", kSoundCushionMs, "do-lost", TRUE, nullptr);
 }
 
+Stream::Losses Stream::pictureLosses() {
+    Losses out;
+    std::lock_guard<std::mutex> lk(jitterMu_);
+    auto it = jitterbuffers_.find(pictureSsrc_.load());
+    if (it == jitterbuffers_.end()) return out;
+    GstStructure* stats = nullptr;
+    g_object_get(it->second, "stats", &stats, nullptr);
+    if (!stats) return out;
+    gst_structure_get_uint64(stats, "num-pushed", &out.in);
+    gst_structure_get_uint64(stats, "num-lost", &out.lost);
+    gst_structure_get_uint64(stats, "num-late", &out.late);
+    gst_structure_get_uint64(stats, "rtx-count", &out.resent);
+    gst_structure_get_uint64(stats, "rtx-success-count", &out.resentCame);
+    gst_structure_free(stats);
+    return out;
+}
+
 gboolean Stream::onWatchdog(gpointer self) {
     auto* me = static_cast<Stream*>(self);
     const int64_t now = Rtc::nowMs();
@@ -286,6 +307,12 @@ gboolean Stream::onWatchdog(gpointer self) {
         me->lastAskMs_ = now;
         ++me->asks_;
         if (me->askFull_) me->askFull_();
+        // What came before it, to tell a loss on the way from the decoder.
+        const Losses l = me->pictureLosses();
+        std::fprintf(stderr, "[game] at %.1f s, no picture for %lld ms: asked for a full one (%llu picture packets lost so far, "
+                             "%llu late)\n",
+                     static_cast<double>(now - me->startedMs_) / 1000.0, static_cast<long long>(now - picture),
+                     static_cast<unsigned long long>(l.lost), static_cast<unsigned long long>(l.late));
     }
     return G_SOURCE_CONTINUE;
 }
@@ -311,6 +338,7 @@ bool Stream::start(const Rtc::Paths& paths) {
     gst_element_set_state(pipeline_, GST_STATE_PLAYING);
     lastPacketMs_ = 0;
     lastPictureMs_ = Rtc::nowMs();
+    startedMs_ = lastPictureMs_.load();
     watchdog_ = g_timeout_add(20, onWatchdog, this);
     return true;
 }
@@ -320,6 +348,11 @@ void Stream::stop() {
     watchdog_ = 0;
     if (!pipeline_) return;
     std::fprintf(stderr, "[game] %u pictures decoded, asked for a full one %u times\n", decoded_.load(), asks_);
+    const Losses l = pictureLosses();
+    std::fprintf(stderr, "[game] picture packets: %llu in, %llu lost, %llu late, %llu resends asked, %llu came\n",
+                 static_cast<unsigned long long>(l.in), static_cast<unsigned long long>(l.lost),
+                 static_cast<unsigned long long>(l.late), static_cast<unsigned long long>(l.resent),
+                 static_cast<unsigned long long>(l.resentCame));
     gst_element_set_state(pipeline_, GST_STATE_NULL);
     if (sound_.running()) {
         const SoundQueue::Stats s = sound_.stats();

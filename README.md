@@ -67,7 +67,8 @@ software.
 its own; `--folder <path>` keeps it somewhere else instead, to try it as a second friend.
 `--try <file>` plays steps from a file into it and saves pictures: [trying.h](src/app/trying.h) says how.
 `--check-game` says what this computer lacks to play, a line each, with no window. On Windows,
-opened with no terminal, what it says as it runs goes to `2pstart.log` in its folder.
+opened with no terminal, what it says as it runs goes to `2pstart.log` in its folder. With
+`TWOPSTART_H264=1` set, it asks the host for H.264 only, to try the two side by side.
 
 The close button leaves it running, so invites still reach the friend: in the tray on Windows, in
 the Dock on a Mac. Startup, in Settings, opens it at login with no window (`--startup`). Friends see
