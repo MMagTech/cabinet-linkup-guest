@@ -60,8 +60,10 @@ bool Tray::hiddenAway() const {
     return (f & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED)) != 0 || (f & SDL_WINDOW_INPUT_FOCUS) == 0;
 }
 
-void Tray::invited(const std::string& who, const std::string& title, const std::string& game) {
-    if (hiddenAway()) notify(*system_, who, title, game);
+bool Tray::invited(const std::string& who, const std::string& title, const std::string& game) {
+    if (!hiddenAway()) return false;
+    notify(*system_, who, title, game);
+    return true;
 }
 
 }  // namespace tray

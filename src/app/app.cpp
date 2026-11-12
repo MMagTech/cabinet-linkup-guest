@@ -9,6 +9,7 @@
 #include "app/startup.h"
 #include "guest/account.h"
 #include "guest/paths.h"
+#include "sound.h"
 #include "ui/look.h"
 
 namespace {
@@ -23,6 +24,26 @@ constexpr float kInvitedSeconds = 6.0f;
 constexpr float kPointerRestSeconds = 2.0f;
 constexpr const char* kCodeLength = "A code has 12 characters";
 constexpr const char* kNotYet = "Not supported yet";
+
+// The console's sound for what a move did (bar.cpp, settings.cpp, linkup.cpp): focus moved, nothing
+// there, something chosen, or back. A pointer resting somewhere makes none: it is not a move.
+void cue(moves::Step::Then then) {
+    using Then = moves::Step::Then;
+    switch (then) {
+        case Then::Moved:
+        case Then::ToBar: sound::play(sound::Cue::Move); break;
+        case Then::Edge: sound::play(sound::Cue::Edge); break;
+        case Then::Press: sound::play(sound::Cue::Activate); break;
+        case Then::Back: sound::play(sound::Cue::Back); break;
+    }
+}
+
+// The level stored in settings.json, by the console's word; Medium for anything else.
+sound::Level soundLevel(const std::string& word) {
+    sound::Level level = sound::Level::Medium;
+    sound::levelFromWord(word, &level);
+    return level;
+}
 
 int colourIndex(const std::string& word) {
     for (int i = 0; i < look::kColourCount; ++i)
@@ -95,6 +116,9 @@ bool App::start(std::string& why) {
     }
     settings_ = guest::readSettings(folder_);
     name_ = guest::username(folder_);
+    // The console's interface sounds, on their own stream beside a game's sound.
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO) || !sound::init()) std::fprintf(stderr, "2pstart: the menus are silent\n");
+    sound::setLevel(soundLevel(settings_.sounds));
     state_.on = true;
     state_.appearOffline = settings_.appearOffline;
     const Uint32 wake = wake_;
@@ -150,7 +174,10 @@ void App::fromServer() {
                 notice_.dot = screens::friendDot(state_.friends, e.name);
                 notice_.life = kInvitedSeconds;
                 notice_.holdUntilPress = true;
-                if (onInvite_) onInvite_(e.name, linkup::invitedYou(e.name), gameOf(state_.friends, e.invite));
+                // The system's notification, with its own sound, when the window is not in front; the
+                // console's invite tone when it is.
+                if (!onInvite_ || !onInvite_(e.name, linkup::invitedYou(e.name), gameOf(state_.friends, e.invite)))
+                    sound::playInvite();
                 break;
             case Kind::InviteEnded: tookInviteEnded(e.invite); break;
             case Kind::Joined: tookJoined(e); break;
@@ -381,6 +408,7 @@ void App::draw() {
             v.colour = colourIndex(settings_.colour);
             v.fullScreen = settings_.fullScreen;
             v.startup = settings_.startup;
+            v.sounds = static_cast<int>(soundLevel(settings_.sounds));
             v.controllers = padNames();
             v.controller = chosenPad();
             v.server = address_;
@@ -583,6 +611,7 @@ void App::move(Move m) {
     // The shoulders mean the same on every screen that has the bar.
     if (m == Move::PrevScreen || m == Move::NextScreen) {
         const moves::BarStep s = moves::bar(place_ == Place::Settings ? 1 : 0, kBarCount, m, true);
+        cue(s.edge ? Then::Edge : Then::Moved);
         if (!s.edge) switchTo(s.at == 1 ? Place::Settings : Place::Friends);
         return;
     }
@@ -593,6 +622,7 @@ void App::move(Move m) {
 
 void App::moveOnBar(Move m) {
     const moves::BarStep s = moves::bar(place_ == Place::Settings ? 1 : 0, kBarCount, m, screenTakesFocus());
+    cue(s.edge ? Then::Edge : Then::Moved);
     if (s.leave) {
         barFocused_ = false;
         return;
@@ -623,6 +653,7 @@ bool App::screenTakesFocus() const { return place_ == Place::Settings || tileCou
 
 void App::moveOnFriends(Move m) {
     const moves::Step s = moves::friends(friendFocus_, tileCount(), m);
+    cue(s.then);
     switch (s.then) {
         case Then::Moved: friendFocus_ = s.focus; break;
         case Then::ToBar:
@@ -647,6 +678,7 @@ void App::moveOnSettings(Move m) {
     using namespace screens;
     if (typingName_) {
         if (m == Move::Press) {
+            sound::play(sound::Cue::Activate);
             const std::string name = trimmed(typedName_);
             typingName_ = false;
             if (textline::ready(name, textline::Kind::Name) && name != name_) {
@@ -654,13 +686,17 @@ void App::moveOnSettings(Move m) {
                 link_->rename(name);
             }
         } else if (m == Move::Back) {
+            sound::play(sound::Cue::Back);
             typingName_ = false;
         }
         return;
     }
     const setting::Row row = settingAtFocus();
-    if ((m == Move::Left || m == Move::Right) && (row == setting::Colour || row == setting::Controller)) {
-        stepSetting(row, m == Move::Right ? 1 : -1);
+    // A choice row takes Left and Right, and A steps it on, as the console's do: heard as a move,
+    // after the change, so Interface sounds is heard at the level it just chose.
+    const bool choice = row == setting::Colour || row == setting::Controller || row == setting::Sounds;
+    if (choice && (m == Move::Left || m == Move::Right || m == Move::Press)) {
+        cue(stepSetting(row, m == Move::Left ? -1 : 1) ? Then::Moved : Then::Edge);
         return;
     }
     std::vector<std::vector<bool>> focusable;
@@ -669,6 +705,7 @@ void App::moveOnSettings(Move m) {
         for (const setting::Row r : cat.rows) focusable.back().push_back(settingFocusable(r));
     }
     const moves::SettingsStep s = moves::settings(settingsCategory_, settingsRow_, focusable, m);
+    cue(m == Move::Back && s.then == Then::Moved ? Then::Back : s.then);
     switch (s.then) {
         case Then::Moved:
             settingsCategory_ = s.category;
@@ -700,7 +737,8 @@ void App::pressSetting(int row) {
             still_ = 0.0f;
             break;
         case setting::Colour:
-        case setting::Controller: stepSetting(row, 1); break;
+        case setting::Controller:
+        case setting::Sounds: stepSetting(row, 1); break;
         case setting::FullScreen: setFullScreen(!settings_.fullScreen); break;
         case setting::Startup: setStartup(!settings_.startup); break;
         case setting::Server: serverPanel(); break;
@@ -713,29 +751,38 @@ void App::pressSetting(int row) {
     }
 }
 
-// A choice row: one along, stopping at either end, as the console's do.
-void App::stepSetting(int row, int by) {
+// A choice row: one along, stopping at either end, as the console's do. False at an end.
+bool App::stepSetting(int row, int by) {
     if (row == screens::setting::Colour) {
         const int now = colourIndex(settings_.colour);
         const int next = std::clamp(now + by, 0, look::kColourCount - 1);
-        if (next == now) return;
+        if (next == now) return false;
         settings_.colour = look::colourWord(static_cast<look::Colour>(next));
-        keepSettings();
     } else if (row == screens::setting::Controller) {
         const int count = static_cast<int>(padIds_.size());
         const int now = chosenPad();
         const int next = std::clamp(now + by, 0, std::max(0, count - 1));
-        if (count == 0 || next == now) return;
+        if (count == 0 || next == now) return false;
         char guid[64] = {};
         SDL_GUIDToString(SDL_GetGamepadGUIDForID(padIds_[static_cast<size_t>(next)]), guid, sizeof guid);
         settings_.controller = guid;
-        keepSettings();
+    } else if (row == screens::setting::Sounds) {
+        const int now = static_cast<int>(soundLevel(settings_.sounds));
+        const int next = std::clamp(now + by, 0, sound::kLevelCount - 1);
+        if (next == now) return false;
+        sound::setLevel(static_cast<sound::Level>(next));
+        settings_.sounds = sound::levelWord(static_cast<sound::Level>(next));
+    } else {
+        return false;
     }
+    keepSettings();
+    return true;
 }
 
 void App::moveOnFirstRun(Move m) {
     if (first_.connecting) return;
     const moves::Step s = moves::column(first_.focus, 4, m);
+    if (s.then != Then::Back) cue(s.then);
     switch (s.then) {
         case Then::Moved:
             first_.focus = s.focus;
@@ -763,11 +810,16 @@ void App::moveOnOverlay(Move m) {
                 notice_.say(kCodeLength, Tone::Problem);
                 return;
             }
-            if (!textline::ready(value, o.fieldKind)) return;
+            if (!textline::ready(value, o.fieldKind)) {
+                cue(Then::Edge);
+                return;
+            }
+            cue(Then::Press);
             auto typed = o.typed;
             closeOverlay();
             if (typed) typed(value);
         } else if (m == Move::Back) {
+            cue(Then::Back);
             closeOverlay();
         }
         return;
@@ -775,11 +827,13 @@ void App::moveOnOverlay(Move m) {
     if (o.reading()) {
         // Nothing to choose: A or B closes it.
         if (m == Move::Press || m == Move::Back) {
+            cue(Then::Back);
             closeOverlay();
             return;
         }
         const int lines = o.kind == Overlay::Kind::HowTo ? screens::howToCount() : screens::creditCount();
         const moves::Step s = moves::column(o.panel.focused, lines, m);
+        cue(s.then);
         if (s.then == Then::Moved) {
             o.panel.focused = s.focus;
             o.panel.top = moves::topFor(s.focus, o.panel.top, lines, parts::kPanelRows);
@@ -789,6 +843,7 @@ void App::moveOnOverlay(Move m) {
     // A line with only a prompt: A goes on, and nothing else does.
     if (o.prompt) {
         if (m == Move::Press) {
+            cue(Then::Press);
             auto then = o.then;
             closeOverlay();
             if (then) then(0);
@@ -796,6 +851,7 @@ void App::moveOnOverlay(Move m) {
         return;
     }
     const moves::Step s = moves::column(o.panel.focused, static_cast<int>(o.panel.options.size()), m);
+    cue(s.then);
     if (s.then == Then::Moved) {
         o.panel.focused = s.focus;
         o.panel.top = moves::topFor(s.focus, o.panel.top, static_cast<int>(o.panel.options.size()), parts::kPanelRows);
@@ -847,6 +903,7 @@ void App::pointAt(float x, float y, bool click) {
         return;
     }
     if (!spotAt(x, y, s, false)) return;
+    if (click) cue(Then::Press);
     if (s.id >= spot::kBar && s.id < spot::kStatus) {
         if (!click || place_ == Place::FirstRun || typingName_) return;
         switchTo(s.id - spot::kBar == 1 ? Place::Settings : Place::Friends);
@@ -1233,7 +1290,7 @@ bool App::closeInGame(const SDL_Event& e) {
 
 // ---- For the tray ---------------------------------------------------------------
 
-void App::tellInvites(std::function<void(const std::string&, const std::string&, const std::string&)> onInvite) {
+void App::tellInvites(std::function<bool(const std::string&, const std::string&, const std::string&)> onInvite) {
     onInvite_ = std::move(onInvite);
 }
 

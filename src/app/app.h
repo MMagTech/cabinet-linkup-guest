@@ -63,7 +63,8 @@ public:
 
     // For the tray (tray.h). An invite heard while nobody may be looking goes to `onInvite` too: who,
     // the console's line for it, and the game.
-    void tellInvites(std::function<void(const std::string&, const std::string&, const std::string&)> onInvite);
+    // Told of each invite: true when the system said it, with a notification of its own.
+    void tellInvites(std::function<bool(const std::string&, const std::string&, const std::string&)> onInvite);
     // Join or Decline for this friend's invite, as pressing their tile opens it. Nothing when it ended.
     void answerFrom(const std::string& who);
     std::string statusLine() const;
@@ -141,7 +142,7 @@ private:
     void pressFriend();
     screens::setting::Row settingAtFocus() const;
     void pressSetting(int row);
-    void stepSetting(int row, int by);
+    bool stepSetting(int row, int by);
     void switchTo(Place place);
     bool screenTakesFocus() const;
     int tileCount() const;
@@ -268,5 +269,5 @@ private:
     // Nobody at the computer: Offline to friends, as a console left alone (idle.h).
     idle::Watch idle_;
     bool away_ = false;
-    std::function<void(const std::string&, const std::string&, const std::string&)> onInvite_;
+    std::function<bool(const std::string&, const std::string&, const std::string&)> onInvite_;
 };

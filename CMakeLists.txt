@@ -74,12 +74,13 @@ else()
     add_compile_options(-Wall -Wextra)
 endif()
 
-# The two headers LinkUp borrows from the console's main program, and only those two: the rest of
-# that folder is the console's, and its names must not answer an #include here.
+# The headers this app borrows from the console's main program, and only these: the rest of that
+# folder is the console's, and its names must not answer an #include here.
 set(BORROWED "${CMAKE_BINARY_DIR}/borrowed")
 configure_file("${FRONTEND}/fileio.h" "${BORROWED}/fileio.h" COPYONLY)
 configure_file("${FRONTEND}/linkup_wire.h" "${BORROWED}/linkup_wire.h" COPYONLY)
 configure_file("${FRONTEND}/linkuprules.h" "${BORROWED}/linkuprules.h" COPYONLY)
+configure_file("${FRONTEND}/sound.h" "${BORROWED}/sound.h" COPYONLY)
 
 # What a console says to a LinkUp server: Noise, pairing, sessions, sealed boxes, and what it keeps.
 add_library(linkup_protocol STATIC
@@ -174,6 +175,15 @@ if(NOT WIN32)
     target_link_libraries(linkup-probe PRIVATE linkup_protocol)
 endif()
 
+# The console's own interface sounds, as they are written (sound.cpp): its clicks and its invite tone,
+# made in code with no sound files, at the Interface sounds row's level. M_PI is Windows' only on ask.
+add_library(ui_sound STATIC "${FRONTEND}/sound.cpp")
+target_include_directories(ui_sound PUBLIC "${BORROWED}")
+target_link_libraries(ui_sound PUBLIC SDL3::SDL3)
+if(WIN32)
+    target_compile_definitions(ui_sound PRIVATE _USE_MATH_DEFINES)
+endif()
+
 # The screens: how to draw (src/ui), what each shows (src/screens), and LinkUp's rules and words,
 # which are the console's own file, so the app says what the console says.
 add_library(screens STATIC
@@ -186,7 +196,7 @@ add_library(screens STATIC
 target_include_directories(screens PUBLIC src "${BORROWED}")
 # The app's version, for About and the window: the project's, above.
 target_compile_definitions(screens PUBLIC TWOPSTART_VERSION="${PROJECT_VERSION}")
-target_link_libraries(screens PUBLIC SDL3::SDL3
+target_link_libraries(screens PUBLIC ui_sound SDL3::SDL3
     $<IF:$<TARGET_EXISTS:SDL3_ttf::SDL3_ttf>,SDL3_ttf::SDL3_ttf,SDL3_ttf::SDL3_ttf-static>)
 
 # Every screen with made-up friends, in a window or as pictures. The fonts go beside it.

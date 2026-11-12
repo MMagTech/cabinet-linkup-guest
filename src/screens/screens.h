@@ -70,6 +70,7 @@ struct SettingsView {
     int colour = 0;            // one of look's sixteen
     bool fullScreen = true;
     bool startup = false;      // the app opens at login, with no window
+    int sounds = 2;            // Interface sounds: Off, Quiet, Medium or Loud (the console's sound.h)
     std::vector<std::string> controllers;   // the ones connected, by name
     int controller = 0;                     // which of them plays
     // Its address, as the console's row shows it. Pressed, the row opens Change server and Leave.
@@ -81,7 +82,7 @@ struct SettingsView {
 };
 // Every row, wherever it sits.
 namespace setting {
-enum Row : int { Name, Server, Controller, Colour, FullScreen, Startup, Version, HowTo, Credits, Count };
+enum Row : int { Name, Server, Controller, Colour, FullScreen, Sounds, Startup, Version, HowTo, Credits, Count };
 }
 // The categories, in order, and their rows in order.
 struct SettingsCategory {

@@ -8,6 +8,7 @@
 #include <iterator>
 
 #include "screens/credits.h"
+#include "sound.h"
 #include "ui/look.h"
 #include "ui/parts.h"
 
@@ -312,7 +313,7 @@ const std::vector<SettingsCategory>& settingsCategories() {
     static const std::vector<SettingsCategory> kCategories = {
         {"LinkUp", {setting::Name, setting::Server}},
         {"Controllers", {setting::Controller}},
-        {"Display and Sound", {setting::Colour, setting::FullScreen}},
+        {"Display and Sound", {setting::Colour, setting::FullScreen, setting::Sounds}},
         {"System", {setting::Startup}},
         {"About", {setting::Version, setting::HowTo, setting::Credits}},
     };
@@ -370,6 +371,14 @@ parts::Row settingRow(setting::Row id, const SettingsView& v) {
             return r;
         }
         case setting::FullScreen: return {"Full screen", v.fullScreen ? "On" : "Off"};
+        case setting::Sounds: {
+            const int level = std::clamp(v.sounds, 0, sound::kLevelCount - 1);
+            parts::Row r{"Interface sounds", sound::levelName(static_cast<sound::Level>(level))};
+            r.choice = true;
+            r.canLeft = level > 0;
+            r.canRight = level + 1 < sound::kLevelCount;
+            return r;
+        }
         case setting::Startup: return {"Startup", v.startup ? "On" : "Off"};
         case setting::Version: return {"Version", v.version};
         case setting::HowTo: {

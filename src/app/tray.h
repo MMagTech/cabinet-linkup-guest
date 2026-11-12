@@ -51,8 +51,8 @@ public:
     // The window, back and in front.
     void open();
     // Somebody invited this one while nobody may be looking: `title` is the console's line ("Invite
-    // from Riley"), `game` under it. Said only while the window is not in front.
-    void invited(const std::string& who, const std::string& title, const std::string& game);
+    // from Riley"), `game` under it. Said only while the window is not in front: true when it was.
+    bool invited(const std::string& who, const std::string& title, const std::string& game);
     // The window is hidden, minimized, or behind another program's.
     bool hiddenAway() const;
 

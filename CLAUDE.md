@@ -11,7 +11,7 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 
 | Path | Its job |
 |---|---|
-| `cabinetos/` | CabinetOS at a pinned commit. Its `linkup/` is built as it is written |
+| `cabinetos/` | CabinetOS at a pinned commit. Its `linkup/` is built as it is written, and so are the console's LinkUp words (`linkuprules.cpp`) and interface sounds (`sound.cpp`) |
 | `CMakeLists.txt`, `cmake/` | The one build, for CI and by hand. `SoundQueue.cmake` cuts the console's sound queue out of `friend_sound.cpp`, where it sits beside PipeWire, for the game and for CabinetOS's Noise test, which runs whole. `WindowsLibraries.cmake` finds the libraries the Windows zip carries |
 | `src/guest/` | 2P Start's own: who the friend is to a server, where the app keeps its folder and settings, and the friend's side of the server (`link`), a game's half of it included, with no window |
 | `src/game/` | A game: the friend's side of the connection on a thread of its own (`game`), the stream with its picture (`stream`) and its sound at the host's pace (`sound`), with no window. GStreamer from its own installer; the picture decoded by the graphics chip, VideoToolbox on a Mac and Direct3D 11 on Windows. `none.cpp` stands in for a build without it (`-DTWOPSTART_GAME=OFF`) |

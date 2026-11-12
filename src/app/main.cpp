@@ -173,7 +173,7 @@ int main(int argc, char* argv[]) {
         asks.sayStillRunning = [&app]() { return app.sayStillRunning(); };
         tray::Tray tray(window, folder, std::move(asks));
         app.tellInvites([&tray](const std::string& who, const std::string& line, const std::string& game) {
-            tray.invited(who, line, game);
+            return tray.invited(who, line, game);
         });
         const auto handle = [&](const SDL_Event& e) {
             if (e.type == SDL_EVENT_QUIT) running = false;
