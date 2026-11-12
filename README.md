@@ -2,14 +2,13 @@
 
 **Player two, from anywhere.**
 
-**This is early and does not work yet.** Nothing here can be installed or
-played today. It is being built in the open.
-
 2P Start is a small app for a friend who has no CabinetOS console. It joins a
 LinkUp game that a CabinetOS console hosts: the friend sees and hears the
 host's game and plays as player two with their own controller. It only joins,
 and never hosts. The game, the saves and the library stay on the host's
 console, and the friend needs none of them.
+
+It is new. Get it from [Releases](https://github.com/MMagTech/cabinet-linkup-guest/releases).
 
 ## Why it exists
 
@@ -17,6 +16,59 @@ CabinetOS is a console under a TV, and that does not change. But not every
 friend can give a PC over to one. 2P Start is a thank-you to the people who
 run CabinetOS: a handful of quarters to hand a buddy. You bring the console
 and the games. They just press Start.
+
+## Installing
+
+2P Start is free, and not signed by Apple or Microsoft, so the first time it
+opens, the computer warns about it. That is expected. Each way below gets past
+it once: by clicking, or with one line to copy and paste.
+
+### On a Mac
+
+A Mac with Apple silicon (M1 or later), on macOS 13 or later.
+
+1. Download `2P-Start-…-Mac.dmg` from Releases and open it.
+2. Drag 2P Start onto Applications.
+3. Open 2P Start from Applications. The Mac says it can't check it: press Done.
+4. Open System Settings, then Privacy & Security. Near the bottom, beside
+   "2P Start was blocked", press Open Anyway, and give your password.
+
+Or, in place of steps 3 and 4: open Terminal (in Applications, Utilities),
+paste this line, and press Return. It takes away the mark that says 2P Start
+came from the internet, for 2P Start alone.
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/2P Start.app"
+```
+
+When it asks to send notifications, press Allow: that is how an invite reaches
+you with the window closed. After an update, do steps 3 and 4 again, or the
+line again.
+
+### On Windows
+
+Windows 10 or 11, 64-bit.
+
+1. Download `2P-Start-…-Windows.zip` from Releases.
+2. Unzip it anywhere, and open `2P Start.exe` in the `2P Start` folder.
+3. Windows says "Windows protected your PC": press More info, then Run anyway.
+
+Or, before you unzip it: right-click the zip, Properties, tick Unblock, and
+press OK. Or open PowerShell, paste this line, and press Return. Either way,
+Windows asks nothing when it opens.
+
+```powershell
+Get-ChildItem "$HOME\Downloads\2P-Start-*-Windows.zip" | Unblock-File
+```
+
+After an update, do it again.
+
+### The first time it opens
+
+It asks for your friend's LinkUp server, the code from their People page, and
+a name. Copy and paste work in each box, and the mouse works as well as a
+controller. Closing the window leaves it running, in the tray or the menu bar,
+so invites still reach you; Settings, System, Keep running changes that.
 
 ## Where it stands
 

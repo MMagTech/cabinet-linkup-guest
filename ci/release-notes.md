@@ -6,4 +6,6 @@
 
 **Windows** (10 or 11, 64-bit): unzip `2P-Start-@VERSION@-Windows.zip` anywhere and open `2P Start.exe` in the `2P Start` folder. Windows says "Windows protected your PC": press More info, then Run anyway.
 
+Each also has a way with one line to copy and paste in place of the clicks: [Installing](https://github.com/MMagTech/cabinet-linkup-guest#installing). After an update, do it again.
+
 On first run it asks for your friend's LinkUp server, the code from their People page, and a name. Copy and paste work in each box. Closing the window leaves it running, in the tray or the menu bar, so invites still reach you; Settings, System, Keep running changes that.
