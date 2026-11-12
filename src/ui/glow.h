@@ -17,7 +17,11 @@
 // dead space all round the game, and the glow fills it to the window's edges.
 //
 // The console does it in a shader each frame. SDL's renderer has none, so this works out the same
-// pixels once, into a texture, and makes it again only when the place or the window's size changes.
+// pixels and lets the graphics chip repeat them. A bar's fade changes only across it, so each bar is
+// one strip, 256 pixels along with the noise in it, laid end to end down the bar: a few hundred
+// thousand pixels at most, on any screen up to 8K, made again only when that bar's thickness
+// changes (the host's pixel shift every three minutes, a window being resized). Worked out whole,
+// a 4K screen took 49 ms and an 8K one 200 ms: a freeze each time.
 
 #pragma once
 
@@ -40,11 +44,17 @@ public:
     void draw(const SDL_FRect& screen, const SDL_FRect& game);
 
 private:
+    // One bar's strip: `thick` pixels across, 256 along, the fade running away from the game.
+    struct Strip {
+        SDL_Texture* texture = nullptr;
+        int thick = 0;
+    };
+    enum Side { kLeft, kRight, kTop, kBottom };
+    // The strip for `side`, `thick` across, made if it is not the one there.
+    SDL_Texture* strip(Side side, int thick);
+
     SDL_Renderer* renderer_;
-    SDL_Texture* texture_ = nullptr;
-    // What the texture was made for: the screen's pixels, and the game's edges on them.
-    int x_ = 0, y_ = 0, w_ = 0, h_ = 0;
-    int left_ = 0, top_ = 0, right_ = 0, bottom_ = 0;
+    Strip strips_[4];
 };
 
 }  // namespace ui
