@@ -10,7 +10,9 @@
 set(gst_licences "${gst}/share/licenses")
 set(vcpkg_share "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share")
 
-# Name on the Credits line = a file or a folder of them. A name given twice gets both.
+# Name on the Credits line = a file or a folder of them. A name given twice gets both. find:<word> is
+# the first in GStreamer's licences with the word in its name: usrsctp's text sits in a different
+# place in each system's GStreamer (in gst-plugins-bad-1.0 on a Mac).
 set(licences
     "CabinetOS 2P Start=${CMAKE_SOURCE_DIR}/LICENSE"
     "CabinetOS=${CMAKE_SOURCE_DIR}/cabinetos/LICENSE"
@@ -27,7 +29,7 @@ set(licences
     "GLib=${gst_licences}/glib"
     "libnice=${gst_licences}/libnice"
     "libsrtp=${gst_licences}/libsrtp"
-    "usrsctp=${gst_licences}/gst-plugins-bad-1.0/ext_sctp_usrsctp_LICENSE.md"
+    "usrsctp=find:usrsctp"
     "Opus=${gst_licences}/opus"
     "ORC=${gst_licences}/orc"
     "PCRE2=${gst_licences}/pcre2"
@@ -55,6 +57,8 @@ foreach(line IN LISTS credit_lines)
 endforeach()
 
 set(named "")
+set(found_all "")
+set(missing "")
 foreach(entry IN LISTS licences)
     string(FIND "${entry}" "=" eq)
     string(SUBSTRING "${entry}" 0 ${eq} name)
@@ -63,11 +67,36 @@ foreach(entry IN LISTS licences)
     if(NOT name IN_LIST credits)
         message(FATAL_ERROR "A licence for ${name}, which has no line in credits.h")
     endif()
-    if(NOT EXISTS "${path}")
-        message(FATAL_ERROR "No licence text for ${name} at ${path}")
+    if(path MATCHES "^find:(.+)$")
+        set(word "${CMAKE_MATCH_1}")
+        # A folder of its own first, then a file anywhere.
+        file(GLOB found "${gst_licences}/*${word}*")
+        if(NOT found)
+            file(GLOB_RECURSE found LIST_DIRECTORIES false "${gst_licences}/*${word}*")
+        endif()
+        list(SORT found)
+        set(path "${gst_licences}/(a name with ${word} in it)")
+        if(found)
+            list(GET found 0 path)
+        endif()
     endif()
+    if(NOT EXISTS "${path}")
+        list(APPEND missing "${name}: ${path}")
+    endif()
+    list(APPEND found_all "${name}=${path}")
     list(APPEND named "${name}")
 endforeach()
+# Every text not found at once, with what GStreamer does have, so one build says all that is wrong.
+if(missing)
+    list(JOIN missing "\n  " missing)
+    file(GLOB there RELATIVE "${gst_licences}" "${gst_licences}/*")
+    file(GLOB bad RELATIVE "${gst_licences}/gst-plugins-bad-1.0" "${gst_licences}/gst-plugins-bad-1.0/*")
+    list(JOIN there " " there)
+    list(JOIN bad " " bad)
+    message(FATAL_ERROR "No licence text for\n  ${missing}\nGStreamer's licences: ${there}\n"
+                        "In gst-plugins-bad-1.0: ${bad}")
+endif()
+set(licences "${found_all}")
 foreach(name IN LISTS credits)
     if(NOT name IN_LIST named AND NOT name IN_LIST not_carried)
         message(FATAL_ERROR "credits.h names ${name}, and the package has no licence text for it")
