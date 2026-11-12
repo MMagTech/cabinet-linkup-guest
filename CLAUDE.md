@@ -1,7 +1,7 @@
 # cabinet-linkup-guest, for coding sessions
 
 CabinetOS 2P Start: a small app that lets a friend with no CabinetOS console join a LinkUp game as
-player two. It only joins, and never hosts. It is early; the [README](README.md) says where it stands.
+player two. It only joins, and never hosts. The [README](README.md) is for a friend landing on it; [CONTRIBUTING.md](CONTRIBUTING.md) says where it stands and how it is built.
 
 The console's own LinkUp code comes in from CabinetOS as the `cabinetos/` submodule, at a pinned
 commit, so there is one copy of the protocol. Nothing in `cabinetos/` is edited here. What a console

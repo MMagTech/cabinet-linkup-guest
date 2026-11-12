@@ -1,14 +1,42 @@
-# CabinetOS 2P Start
+<p align="center"><img src="icon/2pstart.png" alt="" width="96"></p>
 
-**Player two, from anywhere.**
+<h1 align="center">CabinetOS 2P Start</h1>
 
-2P Start is a small app for a friend who has no CabinetOS console. It joins a
-LinkUp game that a CabinetOS console hosts: the friend sees and hears the
-host's game and plays as player two with their own controller. It only joins,
-and never hosts. The game, the saves and the library stay on the host's
-console, and the friend needs none of them.
+<p align="center"><b>Player two, from anywhere.</b><br>
+A small app for a Mac or a Windows PC that joins a friend's game on their
+<a href="https://github.com/MMagTech/cabinetos">CabinetOS</a> console.</p>
 
-It is new. Get it from [Releases](https://github.com/MMagTech/cabinet-linkup-guest/releases).
+<p align="center">
+<a href="https://github.com/MMagTech/cabinet-linkup-guest/releases/latest"><b>Download</b></a> ·
+<a href="#installing">Install</a> ·
+<a href="https://github.com/MMagTech/cabinetos/blob/main/docs/wiki/linkup.md">LinkUp</a>
+</p>
+
+![Riley invites you to Burnout 3: Join or Decline](docs/media/join.png)
+
+2P Start is for a friend who has no CabinetOS console. Your friend hosts the
+game on their console with LinkUp, and 2P Start shows it on your computer, with
+its sound, while you play as player two with your own controller. It only
+joins, and never hosts. The games, the saves and the library stay on your
+friend's console, and you need none of them.
+
+- **Pair once.** Your friend's LinkUp server and a code, and you are in their
+  friends list from then on.
+- **Invites reach you with the window closed.** It waits in the tray or the
+  menu bar, and an invite comes as a notification with Join and Decline on it.
+- **The picture your computer's graphics chip decodes**, in H.265 where it can,
+  as a console takes it, and H.264 everywhere else.
+- **Your own controller**, or a keyboard and mouse. Copy and paste work in
+  every box.
+- **The console's own LinkUp**: its screens, its words, its sixteen colours and
+  its sounds.
+- **It says when there is a new version**, from Settings, Check for updates.
+
+| | | |
+|---|---|---|
+| ![Pairing: the server, the code and a name](docs/media/first-run.png) | ![Your friends, one with an invite](docs/media/invite.png) | ![Settings, System: Keep running, Startup, Check for updates](docs/media/settings.png) |
+
+The pictures are from the app's gallery, with made-up friends.
 
 ## Why it exists
 
@@ -16,6 +44,15 @@ CabinetOS is a console under a TV, and that does not change. But not every
 friend can give a PC over to one. 2P Start is a thank-you to the people who
 run CabinetOS: a handful of quarters to hand a buddy. You bring the console
 and the games. They just press Start.
+
+## What you need
+
+- **A friend with a CabinetOS console** and LinkUp on, and from them, their
+  LinkUp server's address and a code for you. Whoever runs the server makes the
+  code on its People page.
+- **A Mac with Apple silicon** (M1 or later) on macOS 13 or later, or **a PC
+  with Windows 10 or 11**, 64-bit.
+- **A controller**, or a keyboard and mouse.
 
 ## Installing
 
@@ -25,9 +62,9 @@ it once: by clicking, or with one line to copy and paste.
 
 ### On a Mac
 
-A Mac with Apple silicon (M1 or later), on macOS 13 or later.
-
-1. Download `2P-Start-…-Mac.dmg` from Releases and open it.
+1. Download `2P-Start-…-Mac.dmg` from
+   [Releases](https://github.com/MMagTech/cabinet-linkup-guest/releases/latest)
+   and open it.
 2. Drag 2P Start onto Applications.
 3. Open 2P Start from Applications. The Mac says it can't check it: press Done.
 4. Open System Settings, then Privacy & Security. Near the bottom, beside
@@ -47,9 +84,9 @@ line again.
 
 ### On Windows
 
-Windows 10 or 11, 64-bit.
-
-1. Download `2P-Start-…-Windows-Setup.exe` from Releases and open it.
+1. Download `2P-Start-…-Windows-Setup.exe` from
+   [Releases](https://github.com/MMagTech/cabinet-linkup-guest/releases/latest)
+   and open it.
 2. Windows says "Windows protected your PC": press More info, then Run anyway.
 3. Press Install. It goes in the Start menu, for you alone, with no
    administrator password.
@@ -67,10 +104,10 @@ the old one, and keeps your pairing.
 
 ### The first time it opens
 
-It asks for your friend's LinkUp server, the code from their People page, and
-a name. Copy and paste work in each box, and the mouse works as well as a
-controller. Closing the window leaves it running, in the tray or the menu bar,
-so invites still reach you; Settings, System, Keep running changes that.
+It asks for your friend's LinkUp server, the code, and a name. Then your
+friend's console lists you, and you see your friends. Closing the window
+leaves 2P Start running, in the tray or the menu bar, so invites still reach
+you; Settings, System, Keep running changes that.
 
 ### Removing it
 
@@ -82,85 +119,28 @@ to the Trash. Your pairing and settings stay, in the folder
 `~/Library/Application Support/CabinetOS 2P Start`, for if you put it back;
 drag that to the Trash too to remove them.
 
-## Where it stands
+## Thanks
 
-- [x] The protocol code building and tested on Windows and macOS
-- [x] Pairing with a LinkUp server
-- [x] The screens, as a gallery
-- [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
-- [x] Picture, sound and a controller on macOS
-- [x] The Mac app, in a DMG, with its menu bar icon
-- [ ] The same on Windows, with its Setup and its tray: built by CI, not yet run on a PC
+2P Start stands on other people's work.
 
-## How it is built
+- **[CabinetOS](https://github.com/MMagTech/cabinetos)**'s own LinkUp code is
+  built into it as it is written, so 2P Start speaks LinkUp exactly as a
+  console does.
+- **[GStreamer](https://gstreamer.freedesktop.org)** brings the game's picture
+  and sound across, and **[SDL](https://www.libsdl.org)** draws the window and
+  reads the controller.
 
-It reuses the console's own LinkUp code from
-[CabinetOS](https://github.com/MMagTech/cabinetos), brought in at a pinned
-commit in `cabinetos/`, so there is one copy of the protocol. What a console
-and a server say to each other is
-[PROTOCOL.md](https://github.com/MMagTech/cabinet-linkup/blob/main/PROTOCOL.md)
-in cabinet-linkup.
+Thank you to everyone who works on them.
 
-## Building
+## Credits and licence
 
-On a Mac, with Homebrew, and GStreamer's own runtime and development packages for macOS, version
-1.28.8, from [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/download/):
+2P Start's own source is MIT licensed. See [`LICENSE`](LICENSE). Each package
+carries the licence of every part inside it, in `licenses`, and Settings,
+Credits names them all. The font is Noto Sans, under the SIL Open Font Licence
+beside it in `assets/fonts`.
 
-```bash
-brew install cmake ninja openssl@3 json-c sdl3 sdl3_ttf
-git submodule update --init
-cmake --preset default && cmake --build --preset default && ctest --preset default
-```
+## Working on 2P Start
 
-`-DTWOPSTART_GAME=OFF` builds everything but the game, with no GStreamer. With the game, the app uses
-GStreamer's own OpenSSL, on a Mac as on Windows; Homebrew's is for a build without it.
-
-The Mac app as friends get it takes vcpkg, with `VCPKG_ROOT` set, in place of Homebrew's libraries:
-`cmake --preset mac && cmake --build --preset mac`, then `cmake --install build-mac --prefix <folder>`
-makes `2P Start.app` there, for Apple silicon and macOS 13 or later: the app, its font, and only the
-parts of GStreamer a game uses, so it runs on a Mac with nothing installed.
-`ci/mac-package.sh` puts it in a DMG. Each CI run keeps the DMG as `2pstart-mac`.
-
-On Windows it takes Visual Studio 2022, vcpkg and GStreamer 1.28.8's own installer, whose OpenSSL
-the app uses. [The workflow](.github/workflows/build.yml) is the worked example. After the build,
-`cmake --install build --config Release --prefix <folder>` makes the app's folder: the app, its font,
-only the parts of GStreamer a game uses, and Microsoft's C++ runtime, so it runs on a PC with nothing
-installed. Inno Setup 6 puts that in a Setup ([windows-setup.iss](ci/windows-setup.iss)), with its
-uninstaller. Each CI run on Windows installs it, tries it and uninstalls it, and keeps the Setup as
-`2pstart-windows`.
-
-A tag `v<version>`, the version in `CMakeLists.txt`, makes a draft release with both, and the words
-in `ci/release-notes.md`. Neither is signed.
-
-The picture is decoded by the computer's graphics chip: VideoToolbox on a Mac, Direct3D 11 on
-Windows. Nearly every Mac and PC has one for H.264, and most from about 2016 on for H.265, which
-the host then sends, as to a console: a clearer picture for the same data. There is no decoder in
-software.
-
-`2pstart` is the app. It opens a window, pairs on first run and keeps what it holds in a folder of
-its own; `--folder <path>` keeps it somewhere else instead, to try it as a second friend.
-`--try <file>` plays steps from a file into it and saves pictures: [trying.h](src/app/trying.h) says how.
-`--check-game` says what this computer lacks to play, a line each, with no window. On Windows,
-opened with no terminal, what it says as it runs goes to `2pstart.log` in its folder. With
-`TWOPSTART_H264=1` set, it asks the host for H.264 only, to try the two side by side.
-
-The close button leaves it running, so invites still reach the friend: in the tray on Windows, in
-the menu bar on a Mac, whose icon has a dot, green for Online and amber for an invite, and a menu of
-its own. Settings, System: Keep running, which Off makes the close button quit; Startup, which opens
-it at login with no window (`--startup`); and Check for updates, which asks GitHub for the newest
-release, by itself a minute after it opens and then each day. Friends see it Offline after 15
-minutes with nobody at the computer, as they would a console.
-
-Every icon is drawn by [icon/make.swift](icon/make.swift): `swift icon/make.swift icon`.
-
-`2pstart-gallery` shows every screen with made-up friends, before any of it is wired to a server:
-Left and Right step through them. `2pstart-gallery --shots <folder>` saves a picture of each.
-
-`2pstart-cli` is the app's server side on the command line, for trying a real LinkUp server by hand
-before there is a window: `pair`, `friends`, `online` and `leave`.
-
-## Licence
-
-MIT. See [LICENSE](LICENSE). The font in `assets/fonts` is Noto Sans, under the SIL Open Font
-Licence beside it. Each package carries the licence of every part inside it, in `licenses`, and
-Settings, Credits names them.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): where it stands, building it on a Mac
+  and on Windows, the packages, what CI checks, and releases.
+- [`CLAUDE.md`](CLAUDE.md): the map of the code, and the rules for every change.
