@@ -23,7 +23,7 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 | `assets/fonts/` | Noto Sans, the console's font, with its licence |
 | `src/cli/` | `2pstart-cli`, the app's server side on the command line |
 | `src/win/` | What Windows lacks for the console's code to build as written: `fileio.h` the Windows way, a few POSIX names, and in `posix/` the POSIX headers `rtc.cpp` names |
-| `src/app/` `idle`, `startup`, `tray` | Where the app meets the computer, each system's own way: Offline with nobody at it, opening at login, and the tray, the Dock and notifications |
+| `src/app/` `idle`, `startup`, `tray`, `menu` | Where the app meets the computer, each system's own way: Offline with nobody at it, opening at login, the tray, the Dock and notifications, and a text box's right-click menu |
 | `tests/` | `guest-test` and `app-test`, with no network and no window |
 | `ci/` | What the workflow runs |
 

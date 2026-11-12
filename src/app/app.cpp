@@ -51,6 +51,17 @@ int colourIndex(const std::string& word) {
     return 0;
 }
 
+// The system's own key for Cut, Copy, Paste, Select All and Undo: Command on a Mac, Ctrl elsewhere.
+bool command(SDL_Keymod mod) {
+#if defined(SDL_PLATFORM_MACOS)
+    return (mod & SDL_KMOD_GUI) != 0;
+#else
+    return (mod & SDL_KMOD_CTRL) != 0;
+#endif
+}
+
+bool shiftHeld() { return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0; }
+
 std::string trimmed(const std::string& s) {
     const size_t first = s.find_first_not_of(' ');
     if (first == std::string::npos) return {};
@@ -386,6 +397,7 @@ void App::draw() {
         case Place::FirstRun: {
             screens::FirstRunView v = first_;
             v.caret = caret_;
+            v.selected = chosenSpan();
             v.clock = clock_;
             v.still = still_;
             screens::drawFirstRun(canvas_, v);
@@ -404,6 +416,7 @@ void App::draw() {
             v.name = typingName_ ? typedName_ : name_;
             v.typingName = typingName_;
             v.caret = caret_;
+            v.selected = chosenSpan();
             v.still = still_;
             v.colour = colourIndex(settings_.colour);
             v.fullScreen = settings_.fullScreen;
@@ -460,6 +473,7 @@ void App::draw() {
         case Overlay::Kind::Field: {
             parts::FieldPanel f = overlay_.field;
             f.caret = caret_;
+            f.selected = chosenSpan();
             f.still = still_;
             f.prompt = parts::prompt(hands_, false, "to continue");
             parts::fieldPanel(canvas_, f);
@@ -486,6 +500,7 @@ void App::handle(const SDL_Event& e) {
             return;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             input_.letGo();
+            dragging_ = 0;
             if (session_) session_->l3 = session_->r3 = false;
             return;
         case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
@@ -503,7 +518,7 @@ void App::handle(const SDL_Event& e) {
             if (settings_.fullScreen) SDL_SetWindowFullscreen(window_, true);
             return;
         case SDL_EVENT_TEXT_INPUT:
-            if (typing() && e.text.text) typeText(e.text.text);
+            if (typing() && e.text.text) typeText(e.text.text, Undo::Change::Typed);
             break;
         case SDL_EVENT_KEY_DOWN: {
             notice_.pressed();
@@ -544,21 +559,29 @@ void App::handle(const SDL_Event& e) {
             // pointer, or the pointer being shown.
             if (e.motion.xrel == 0.0f && e.motion.yrel == 0.0f) return;
             pointerStill_ = 0.0f;
+            pointerUnheard_ = false;
             float x = 0, y = 0;
             SDL_RenderCoordinatesFromWindow(renderer_, e.motion.x, e.motion.y, &x, &y);
             setHands(parts::Hands::Mouse);
-            pointAt(x, y, false);
+            if (dragging_ && (e.motion.state & SDL_BUTTON_LMASK)) dragTo(x);
+            pointAt(x, y, 0);
             return;
         }
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN: {
             notice_.pressed();
+            dragging_ = 0;
+            float x = 0, y = 0;
+            clickAt(e.button, x, y);
             if (e.button.button == SDL_BUTTON_LEFT) {
-                float x = 0, y = 0;
-                SDL_RenderCoordinatesFromWindow(renderer_, e.button.x, e.button.y, &x, &y);
                 setHands(parts::Hands::Mouse);
-                pointAt(x, y, true);
+                pointAt(x, y, std::max<int>(e.button.clicks, 1));
                 return;
             }
+            if (e.button.button == SDL_BUTTON_RIGHT && lineMenu(x, y)) return;
+            break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (e.button.button == SDL_BUTTON_LEFT) dragging_ = 0;
             break;
         case SDL_EVENT_MOUSE_WHEEL:
             if (overlay_.reading() && e.wheel.y != 0.0f) {
@@ -576,6 +599,22 @@ void App::handle(const SDL_Event& e) {
     if (m) move(*m);
 }
 
+// The pointer's moves over an open menu go to the menu, so a click once it has closed, before the
+// pointer is heard moving again, would land where it was before: a right-click on another line,
+// which closes the menu, would open it for the first. There, the system says where it is.
+void App::clickAt(const SDL_MouseButtonEvent& b, float& x, float& y) const {
+    float wx = b.x, wy = b.y;
+    if (pointerUnheard_) {
+        float gx = 0, gy = 0;
+        int left = 0, top = 0;
+        SDL_GetGlobalMouseState(&gx, &gy);
+        SDL_GetWindowPosition(window_, &left, &top);
+        wx = gx - static_cast<float>(left);
+        wy = gy - static_cast<float>(top);
+    }
+    SDL_RenderCoordinatesFromWindow(renderer_, wx, wy, &x, &y);
+}
+
 void App::setHands(parts::Hands hands) {
     if (hands == hands_) return;
     hands_ = hands;
@@ -588,10 +627,14 @@ void App::setHands(parts::Hands hands) {
 
 void App::move(Move m) {
     // In a line, Left and Right are its caret, a letter at a time, as in the console's keyboard
-    // field: from the keys and the d-pad alike, and held, at the pace every held direction has.
+    // field: from the keys and the d-pad alike, and held, at the pace every held direction has. With
+    // Shift, they choose the letters they pass.
     if ((m == Move::Left || m == Move::Right) && typing()) {
         const int by = m == Move::Right ? 1 : -1;
-        edit([by](textline::Line l, textline::Kind kind) { return textline::step(std::move(l), by, kind); });
+        const bool choosing = shiftHeld();
+        edit([by, choosing](textline::Line l, textline::Kind kind) {
+            return textline::step(std::move(l), by, kind, choosing);
+        });
         return;
     }
     if (overlay_.kind != Overlay::Kind::None) {
@@ -881,9 +924,11 @@ bool App::spotAt(float x, float y, ui::Spot& out, bool overlayOnly) const {
 
 // Pointing focuses and a click presses. Over a panel only the panel counts, and a click outside it
 // is Back. First run's lines take focus only from a click, so the pointer resting on one does not
-// move where typing goes. A click on a line's letters puts its caret there.
-void App::pointAt(float x, float y, bool click) {
+// move where typing goes. A click on a line's letters puts its caret there, and a drag from it
+// chooses them.
+void App::pointAt(float x, float y, int clicks) {
     namespace spot = parts::spot;
+    const bool click = clicks > 0;
     float cx = 0, cy = 0;
     canvas_.toCanvas(x, y, cx, cy);
     ui::Spot s;
@@ -899,7 +944,7 @@ void App::pointAt(float x, float y, bool click) {
         }
         if (!hit) move(Move::Back);
         else if (option || (overlay_.reading() && s.id == spot::kPanel)) move(Move::Press);
-        else if (overlay_.kind == Overlay::Kind::Field && s.id == spot::kField) clickCaret(s.id, cx, false);
+        else if (overlay_.kind == Overlay::Kind::Field && s.id == spot::kField) clickCaret(s.id, cx, false, clicks);
         return;
     }
     if (!spotAt(x, y, s, false)) return;
@@ -916,7 +961,7 @@ void App::pointAt(float x, float y, bool click) {
             const int was = first_.focus;
             first_.focus = s.id - spot::kItem;
             if (first_.focus == 3) connect();
-            else clickCaret(s.id, cx, first_.focus != was);
+            else clickCaret(s.id, cx, first_.focus != was, clicks);
             return;
         }
         case Place::Friends:
@@ -941,7 +986,7 @@ void App::pointAt(float x, float y, bool click) {
             if (typingName_) {
                 if (!click) return;
                 if (row == screens::setting::Name) {
-                    clickCaret(s.id, cx, false);
+                    clickCaret(s.id, cx, false, clicks);
                     return;
                 }
                 typingName_ = false;
@@ -952,7 +997,7 @@ void App::pointAt(float x, float y, bool click) {
             if (!click) return;
             pressSetting(row);
             // Pressed into typing: the caret goes where the click was.
-            if (typingName_) clickCaret(s.id, cx, false);
+            if (typingName_) clickCaret(s.id, cx, false, clicks);
             return;
         }
         case Place::Game:
@@ -992,31 +1037,40 @@ std::string* App::typedLine(textline::Kind& kind) {
 }
 
 // A key or a move holds the caret still, as on the console: it blinks only while it waits.
-void App::edit(const std::function<textline::Line(textline::Line, textline::Kind)>& how) {
+void App::edit(const std::function<textline::Line(textline::Line, textline::Kind)>& how, Undo::Change change) {
     textline::Kind kind;
     std::string* line = typedLine(kind);
     if (!line) return;
-    textline::Line now = how(textline::Line{*line, caret_}, kind);
+    const textline::Line was{*line, caret_, anchor_};
+    textline::Line now = how(was, kind);
+    if (now.text != was.text) undo_.before(was, change);
+    else undo_.moved();
     *line = std::move(now.text);
     caret_ = now.caret;
+    anchor_ = now.anchor;
     still_ = 0.0f;
 }
 
-void App::typeText(const std::string& text) {
-    edit([&text](textline::Line l, textline::Kind kind) { return textline::add(std::move(l), text, kind); });
+void App::typeText(const std::string& text, Undo::Change change) {
+    edit([&text](textline::Line l, textline::Kind kind) { return textline::add(std::move(l), text, kind); }, change);
 }
 
 // Left and Right are moves (move), so a held one repeats as every held direction does. These keys
-// repeat as the computer repeats them.
+// repeat as the computer repeats them. With Shift, Home and End choose as they go.
 bool App::typeKey(const SDL_KeyboardEvent& key) {
     using textline::Kind;
     using textline::Line;
-    const auto to = [this](size_t at) {
-        edit([at](Line l, Kind kind) { return textline::moveTo(std::move(l), at, kind); });
+    const bool choosing = (key.mod & SDL_KMOD_SHIFT) != 0;
+    const auto to = [this, choosing](size_t at) {
+        edit([at, choosing](Line l, Kind kind) { return textline::moveTo(std::move(l), at, kind, choosing); });
     };
     switch (key.key) {
-        case SDLK_BACKSPACE: edit([](Line l, Kind kind) { return textline::backspace(std::move(l), kind); }); return true;
-        case SDLK_DELETE: edit([](Line l, Kind kind) { return textline::forwardDelete(std::move(l), kind); }); return true;
+        case SDLK_BACKSPACE:
+            edit([](Line l, Kind kind) { return textline::backspace(std::move(l), kind); }, Undo::Change::Erased);
+            return true;
+        case SDLK_DELETE:
+            edit([](Line l, Kind kind) { return textline::forwardDelete(std::move(l), kind); }, Undo::Change::Erased);
+            return true;
         case SDLK_HOME: to(0); return true;
         case SDLK_END: to(std::string::npos); return true;
 #if defined(SDL_PLATFORM_MACOS)
@@ -1027,28 +1081,142 @@ bool App::typeKey(const SDL_KeyboardEvent& key) {
             to(key.key == SDLK_LEFT ? 0 : std::string::npos);
             return true;
 #endif
+        case SDLK_A:
+        case SDLK_C:
+        case SDLK_X:
         case SDLK_V:
-            if (!(key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) return false;
-            if (char* clip = SDL_GetClipboardText()) {
-                typeText(clip);
-                SDL_free(clip);
+        case SDLK_Z:
+            if (!command(key.mod)) return false;
+            switch (key.key) {
+                case SDLK_A: apply(menu::Edit::SelectAll); break;
+                case SDLK_C: apply(menu::Edit::Copy); break;
+                case SDLK_X: apply(menu::Edit::Cut); break;
+                case SDLK_V: apply(menu::Edit::Paste); break;
+                // Shift with it is Redo elsewhere, which this has not: it does nothing.
+                default: if (!choosing) undo(); break;
             }
             return true;
         default: return false;
     }
 }
 
+void App::apply(menu::Edit e) {
+    using textline::Kind;
+    using textline::Line;
+    textline::Kind kind;
+    const std::string* line = typedLine(kind);
+    if (!line) return;
+    const std::string chosen = textline::chosenText(Line{*line, caret_, anchor_}, kind);
+    switch (e) {
+        case menu::Edit::None: return;
+        case menu::Edit::Cut:
+        case menu::Edit::Copy:
+            if (chosen.empty()) return;
+            SDL_SetClipboardText(chosen.c_str());
+            if (e == menu::Edit::Cut) edit([](Line l, Kind k) { return textline::backspace(std::move(l), k); });
+            return;
+        case menu::Edit::Paste:
+            if (char* clip = SDL_GetClipboardText()) {
+                typeText(clip, Undo::Change::Other);
+                SDL_free(clip);
+            }
+            return;
+        case menu::Edit::SelectAll: edit([](Line l, Kind k) { return textline::all(std::move(l), k); }); return;
+    }
+}
+
+void App::undo() {
+    textline::Kind kind;
+    std::string* line = typedLine(kind);
+    if (!line) return;
+    const std::optional<textline::Line> was = undo_.back();
+    if (!was) return;
+    *line = was->text;
+    caret_ = was->caret;
+    anchor_ = was->anchor;
+    still_ = 0.0f;
+}
+
+parts::Span App::chosenSpan() {
+    textline::Kind kind;
+    const std::string* line = typedLine(kind);
+    if (!line) return {};
+    const auto [from, to] = textline::chosen(textline::Line{*line, caret_, anchor_}, kind);
+    return {from, to};
+}
+
 void App::caretToEnd() {
     textline::Kind kind;
     const std::string* line = typedLine(kind);
     caret_ = line ? line->size() : 0;
+    anchor_.reset();
+    undo_.clear();
 }
 
-void App::clickCaret(int spot, float x, bool fresh) {
-    if (const std::optional<size_t> at = canvas_.caretAt(spot, x))
-        edit([at](textline::Line l, textline::Kind kind) { return textline::moveTo(std::move(l), *at, kind); });
-    else if (fresh)
-        caretToEnd();
+void App::clickCaret(int spot, float x, bool fresh, int clicks) {
+    using textline::Kind;
+    using textline::Line;
+    if (fresh) caretToEnd();
+    dragging_ = spot;
+    if (clicks >= 3) {
+        edit([](Line l, Kind kind) { return textline::all(std::move(l), kind); });
+        return;
+    }
+    const std::optional<size_t> at = canvas_.caretAt(spot, x);
+    if (!at) return;
+    if (clicks == 2) {
+        edit([at](Line l, Kind kind) { return textline::word(std::move(l), *at, kind); });
+        return;
+    }
+    const bool choosing = shiftHeld();
+    edit([at, choosing](Line l, Kind kind) { return textline::moveTo(std::move(l), *at, kind, choosing); });
+}
+
+void App::dragTo(float x) {
+    if (!typing()) return;
+    float cx = 0, cy = 0;
+    canvas_.toCanvas(x, 0.0f, cx, cy);
+    const std::optional<size_t> at = canvas_.caretAt(dragging_, cx, true);
+    if (at) edit([at](textline::Line l, textline::Kind kind) { return textline::moveTo(std::move(l), *at, kind, true); });
+}
+
+bool App::isLine(int spot) const {
+    namespace s = parts::spot;
+    if (overlay_.kind == Overlay::Kind::Field) return spot == s::kField;
+    if (overlay_.kind != Overlay::Kind::None) return false;
+    switch (place_) {
+        case Place::FirstRun: return !first_.connecting && spot >= s::kItem && spot < s::kItem + 3;
+        case Place::Settings: return spot == s::kItem + screens::setting::Name;
+        case Place::Friends:
+        case Place::Game: return false;
+    }
+    return false;
+}
+
+// As a text box's: the right-click puts the caret where it is, as a click would, unless it is on the
+// chosen letters, which then stay chosen for Cut or Copy. A line not being typed into is pressed into
+// typing first, so the Code line can be pasted into with the mouse alone.
+bool App::lineMenu(float x, float y) {
+    ui::Spot s;
+    if (!spotAt(x, y, s, overlay_.kind != Overlay::Kind::None) || !isLine(s.id)) return false;
+    setHands(parts::Hands::Mouse);
+    float cx = 0, cy = 0;
+    canvas_.toCanvas(x, y, cx, cy);
+    const parts::Span was = chosenSpan();
+    const std::optional<size_t> at = canvas_.caretAt(s.id, cx);
+    const bool onChosen = typing() && !was.empty() && at && *at >= was.from && *at <= was.to;
+    if (!onChosen) pointAt(x, y, 1);
+    dragging_ = 0;
+    textline::Kind kind;
+    const std::string* line = typedLine(kind);
+    if (!typing() || !line) return true;
+    menu::Can can;
+    can.cut = can.copy = !chosenSpan().empty();
+    can.paste = SDL_HasClipboardText();
+    can.selectAll = !line->empty();
+    apply(menu::edit(window_, can));
+    pointerUnheard_ = true;
+    return true;
 }
 
 // ---- What happens ------------------------------------------------------------

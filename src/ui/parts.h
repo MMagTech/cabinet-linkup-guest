@@ -79,6 +79,13 @@ struct Panel {
 };
 void panel(ui::Canvas& c, const Panel& p);
 
+// The letters chosen in a line being typed into, in bytes, from `from` to `to`: none when they are
+// the same. The console has no such thing, as it types only with a controller.
+struct Span {
+    size_t from = 0, to = 0;
+    bool empty() const { return from >= to; }
+};
+
 // A row as the console's Settings draws one: a label, and what it is set to.
 struct Row {
     std::string label;
@@ -93,6 +100,7 @@ struct Row {
     // the line with the caret in it kept in view.
     bool typing = false;
     size_t caret = std::string::npos;
+    Span selected = {};      // while typing: shown in place of the caret
     float still = 0.0f;      // seconds since the last key, for the caret's blink
     // A line that is typed into, whether it is now or not: where its letters fall is kept under
     // this spot, for a click to put the caret between two (Canvas::letters). 0 for any other row.
@@ -105,6 +113,8 @@ void row(ui::Canvas& c, float x, float y, float w, const Row& r, float focus);
 // and drawn over them, so the letters do not move as it walks through. It holds still for half a
 // second after a key and then blinks once a second, fading.
 void caret(ui::Canvas& c, float x, float baseline, ui::TextStyle st, float still);
+// Chosen letters, from `x` to `right`: the caret's cyan, faint, behind them, as tall as the caret.
+void selection(ui::Canvas& c, float x, float right, float baseline, ui::TextStyle st);
 
 // A line to type into, as the console's on-screen keyboard shows one, with no keys under it: a
 // computer has its own. The title, a hint under it, the field, and what Enter does.
@@ -113,6 +123,7 @@ struct FieldPanel {
     std::string hint;          // which server a code is for
     std::string value;
     size_t caret = std::string::npos;   // in bytes; past the end is the end
+    Span selected = {};                 // shown in place of the caret
     std::string placeholder;
     float still = 0.0f;
     Prompt prompt;

@@ -1,6 +1,7 @@
 // The app's parts that need no window and no network: where focus goes, what a controller, the
-// keys and the mouse ask for, what a typed line keeps, the settings file, the server's list of
-// friends read with each invite's sealed box opened, the idle rule, and Startup's entry.
+// keys and the mouse ask for, what a typed line keeps and chooses, and its Undo, the settings file,
+// the server's list of friends read with each invite's sealed box opened, the idle rule, and
+// Startup's entry.
 //
 //   app-test
 
@@ -8,7 +9,9 @@
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "app/idle.h"
@@ -17,6 +20,7 @@
 #include "app/startup.h"
 #include "app/textline.h"
 #include "app/tray_system.h"
+#include "app/undo.h"
 #include "box.h"
 #include "fileio.h"
 #include "guest/link.h"
@@ -258,6 +262,92 @@ void theCaretIsWhereTypingGoes() {
     std::printf("  the caret is where typing goes\n");
 }
 
+textline::Line choosing(const std::string& text, size_t anchor, size_t caret) { return textline::Line{text, caret, anchor}; }
+bool chose(const textline::Line& l, textline::Kind kind, size_t from, size_t to) {
+    return textline::chosen(l, kind) == std::make_pair(from, to);
+}
+
+void lettersAreChosenAsInAnyApp() {
+    using textline::Kind;
+    using namespace textline;
+    const std::string address = "linkup.example.org:7845";
+    check(chose(at(address, 7), Kind::Address, 7, 7), "nothing is chosen at first");
+    check(chose(step(step(at(address, 7), 1, Kind::Address, true), 1, Kind::Address, true), Kind::Address, 7, 9),
+          "Shift-Right chooses a letter at a time");
+    check(chose(step(at(address, 7), -1, Kind::Address, true), Kind::Address, 6, 7), "Shift-Left chooses back");
+    check(chose(step(choosing(address, 7, 8), -1, Kind::Address, true), Kind::Address, 7, 7),
+          "back over the one letter chosen chooses nothing");
+    check(same(step(choosing(address, 7, 14), -1, Kind::Address), address, 7), "Left lets go, at the start of the chosen");
+    check(same(step(choosing(address, 14, 7), 1, Kind::Address), address, 14), "Right lets go, at their end");
+    check(chose(moveTo(at(address, 7), std::string::npos, Kind::Address, true), Kind::Address, 7, address.size()),
+          "Shift-End chooses to the end");
+    check(chose(moveTo(choosing(address, 7, 14), 0, Kind::Address, true), Kind::Address, 0, 7),
+          "a drag back past the anchor chooses the other way");
+    check(chose(moveTo(choosing(address, 7, 14), 3, Kind::Address), Kind::Address, 3, 3), "a click lets go");
+
+    check(chosenText(word(at(address, 0), 9, Kind::Address), Kind::Address) == "example", "a double-click chooses a word");
+    check(chosenText(word(at(address, 0), 14, Kind::Address), Kind::Address) == "example",
+          "a double-click just after a word chooses it");
+    check(chosenText(word(at("a..b", 0), 2, Kind::Address), Kind::Address) == ".", "a mark is chosen alone");
+    check(chosenText(word(at("alex_on_pc", 0), 2, Kind::Name), Kind::Name) == "alex_on_pc", "_ is part of a word");
+    check(chosenText(word(at("K7MR-4QXT-9HPV", 0), 6, Kind::Code), Kind::Code) == "4QXT", "in a code, a group is a word");
+    check(chose(word(at("K7MR-4QXT-9HPV", 0), 6, Kind::Code), Kind::Code, 5, 9), "and it starts on its letter, not the dash");
+    check(chosenText(all(at(address, 3), Kind::Address), Kind::Address) == address, "Select all");
+    check(chose(all(at("", 0), Kind::Name), Kind::Name, 0, 0), "an empty line has nothing to choose");
+
+    check(same(add(choosing(address, 7, 14), "cabinet", Kind::Address), "linkup.cabinet.org:7845", 14),
+          "typing takes the place of what is chosen");
+    check(same(add(choosing(address, 7, 14), " ", Kind::Address), address, 14) &&
+              add(choosing(address, 7, 14), " ", Kind::Address).anchor == 7u,
+          "a space, which an address does not keep, leaves what is chosen");
+    check(same(backspace(choosing(address, 14, 7), Kind::Address), "linkup..org:7845", 7), "Backspace takes what is chosen");
+    check(same(forwardDelete(choosing(address, 7, 14), Kind::Address), "linkup..org:7845", 7), "and so does Delete");
+    check(same(add(choosing("K7MR-4QXT-9HPV", 4, 9), "zzzz", Kind::Code), "K7MR-ZZZZ-9HPV", 9),
+          "a group of a code typed over is replaced, even when the code is whole");
+    check(same(backspace(choosing("K7MR-4QXT-9HPV", 0, 9), Kind::Code), "9HPV", 0), "a code is regrouped after a cut");
+    check(same(add(all(atEnd("K7MR-4QXT-9HPV"), Kind::Code), " ab3c-defg-hjkm\n", Kind::Code), "AB3C-DEFG-HJKM", 14),
+          "a code pasted over a whole one replaces it");
+    check(same(add(choosing("alex", 0, 2), " ", Kind::Name), "ex", 0), "a name typed over at its start loses the space");
+    std::printf("  letters are chosen as in any app\n");
+}
+
+void undoGoesBackAChangeAtATime() {
+    using textline::Kind;
+    using textline::Line;
+    Undo u;
+    Line l = at("", 0);
+    // "abc" typed, a Backspace, then "d" pasted.
+    for (const char* letter : {"a", "b", "c"}) {
+        u.before(l, Undo::Change::Typed);
+        l = textline::add(l, letter, Kind::Name);
+    }
+    u.before(l, Undo::Change::Erased);
+    l = textline::backspace(l, Kind::Name);
+    u.before(l, Undo::Change::Other);
+    l = textline::add(l, "d", Kind::Name);
+    check(l.text == "abd", "the line as typed");
+    std::optional<Line> back = u.back();
+    check(back && back->text == "ab", "Undo takes back the paste");
+    back = u.back();
+    check(back && back->text == "abc", "then the Backspace");
+    back = u.back();
+    check(back && back->text.empty(), "and letters typed one after another all at once");
+    check(!u.back(), "then there is nothing to undo");
+
+    u.before(at("ab", 2), Undo::Change::Typed);
+    u.moved();
+    u.before(at("abc", 1), Undo::Change::Typed);
+    back = u.back();
+    check(back && same(*back, "abc", 1), "the caret moved between letters starts another change");
+    u.before(choosing("abc", 0, 3), Undo::Change::Erased);
+    back = u.back();
+    check(back && back->anchor == 0u, "what was chosen comes back with it");
+    u.before(at("a", 1), Undo::Change::Typed);
+    u.clear();
+    check(!u.back(), "a line new to typing has nothing to undo");
+    std::printf("  undo goes back a change at a time\n");
+}
+
 void settingsAreKept(const std::string& root) {
     const std::string folder = root + "/settings";
     guest::Settings none = guest::readSettings(folder);
@@ -462,6 +552,8 @@ int main() {
     handsBecomeMoves();
     typedLinesKeepWhatTheyShould();
     theCaretIsWhereTypingGoes();
+    lettersAreChosenAsInAnyApp();
+    undoGoesBackAChangeAtATime();
     settingsAreKept(rootText);
     idleIsTheConsolesRule();
     startupIsTheComputersOwn(rootText);

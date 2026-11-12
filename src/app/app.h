@@ -21,8 +21,10 @@ struct json_object;
 
 #include "app/idle.h"
 #include "app/input.h"
+#include "app/menu.h"
 #include "app/notice.h"
 #include "app/textline.h"
+#include "app/undo.h"
 #include "game/game.h"
 #include "guest/link.h"
 #include "guest/settings.h"
@@ -147,23 +149,39 @@ private:
     bool screenTakesFocus() const;
     int tileCount() const;
 
-    // The mouse.
-    void pointAt(float x, float y, bool click);
+    // The mouse. `clicks` is 0 for the pointer moving, 1 for a click, 2 for a double-click.
+    void pointAt(float x, float y, int clicks);
     bool spotAt(float x, float y, ui::Spot& out, bool overlayOnly) const;
+    // Where a click is, on the renderer.
+    void clickAt(const SDL_MouseButtonEvent& b, float& x, float& y) const;
+    // The left button held down across a line's letters, from a click on them: chosen.
+    void dragTo(float x);
+    // A right-click on a line: the system's own menu for it (menu.h). False anywhere else: Back.
+    bool lineMenu(float x, float y);
+    bool isLine(int spot) const;
 
     // Typing.
     bool typing() const;
     std::string* typedLine(textline::Kind& kind);
-    // The line being typed, changed by `how`, its caret with it.
-    void edit(const std::function<textline::Line(textline::Line, textline::Kind)>& how);
-    void typeText(const std::string& text);
+    // The line being typed, changed by `how`, its caret and chosen letters with it: kept for Undo as
+    // a change of kind `change`.
+    void edit(const std::function<textline::Line(textline::Line, textline::Kind)>& how,
+              Undo::Change change = Undo::Change::Other);
+    void typeText(const std::string& text, Undo::Change change);
     // The keys that edit a line, other than the arrows: false for any other key.
     bool typeKey(const SDL_KeyboardEvent& key);
-    // A line new to typing: the caret at its end, where typing goes on.
+    // Cut, Copy, Paste or Select All, from the keys or the menu.
+    void apply(menu::Edit e);
+    void undo();
+    // Where the chosen letters of the line being typed are, for drawing.
+    parts::Span chosenSpan();
+    // A line new to typing: the caret at its end, where typing goes on, with nothing chosen and
+    // nothing to undo.
     void caretToEnd();
     // A click on a line: the caret where it landed, or, off its letters, at the end of a line new to
-    // typing (`fresh`).
-    void clickCaret(int spot, float x, bool fresh);
+    // typing (`fresh`). Shift chooses up to it; a double-click chooses a word, and a third click all
+    // of it.
+    void clickCaret(int spot, float x, bool fresh, int clicks);
 
     // What happens.
     void connect();
@@ -204,6 +222,10 @@ private:
     float clock_ = 0.0f;
     float still_ = 0.0f;      // since the last key, for the caret
     size_t caret_ = 0;        // in the line being typed, in bytes
+    std::optional<size_t> anchor_;   // where its chosen letters start, the caret their other end
+    Undo undo_;
+    int dragging_ = 0;        // the line a click with the button still down landed on: its spot
+    bool pointerUnheard_ = false;   // a menu has closed, and the pointer has not moved since
 
     Place place_ = Place::FirstRun;
     bool barFocused_ = false;

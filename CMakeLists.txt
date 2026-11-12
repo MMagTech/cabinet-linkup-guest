@@ -213,21 +213,21 @@ add_library(app_core STATIC
 target_link_libraries(app_core PUBLIC guest screens)
 
 # Where the app meets the computer, each system's own way: whether anybody is at it (idle), opening at
-# login (startup), and the tray, the Dock and notifications (tray).
+# login (startup), the tray, the Dock and notifications (tray), and a line's right-click menu (menu).
 add_library(app_system STATIC src/app/idle.cpp src/app/startup.cpp src/app/tray.cpp)
 target_include_directories(app_system PUBLIC src)
 target_link_libraries(app_system PUBLIC SDL3::SDL3)
 if(APPLE)
     enable_language(OBJCXX)
-    target_sources(app_system PRIVATE src/app/tray_mac.mm)
-    set_source_files_properties(src/app/tray_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    target_sources(app_system PRIVATE src/app/tray_mac.mm src/app/menu_mac.mm)
+    set_source_files_properties(src/app/tray_mac.mm src/app/menu_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
     target_link_libraries(app_system PUBLIC "-framework AppKit" "-framework ApplicationServices" "-framework IOKit"
                                             "-framework UserNotifications")
 elseif(WIN32)
-    target_sources(app_system PRIVATE src/app/tray_win.cpp)
+    target_sources(app_system PRIVATE src/app/tray_win.cpp src/app/menu_win.cpp)
     target_link_libraries(app_system PUBLIC shell32 user32 wtsapi32 powrprof)
 else()
-    target_sources(app_system PRIVATE src/app/tray_none.cpp)
+    target_sources(app_system PRIVATE src/app/tray_none.cpp src/app/menu_none.cpp)
 endif()
 target_link_libraries(app_core PUBLIC app_system)
 
