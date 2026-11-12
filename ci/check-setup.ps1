@@ -62,6 +62,8 @@ if ($wrong.Count -gt 0) { throw "The app lacks what a game needs: $($wrong -join
 # What the app itself leaves, as it would after a friend's use: a pairing, Startup on, and the name.
 New-Item -ItemType Directory -Force $data | Out-Null
 Set-Content (Join-Path $data 'settings.json') '{}'
+# A new person's Run key may not be there yet; the app makes it as this does.
+if (-not (Test-Path $run)) { New-Item -Path $run | Out-Null }
 New-ItemProperty -Path $run -Name 'CabinetOS 2P Start' -Value "`"$app`" --startup" -Force | Out-Null
 New-Item -Path $named -Force | Out-Null
 
