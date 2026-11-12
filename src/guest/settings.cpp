@@ -29,6 +29,8 @@ Settings readSettings(const std::string& folder) {
     s.fullScreen = jsonutil::flag(o, "full_screen");
     s.controller = jsonutil::str(o, "controller");
     s.appearOffline = jsonutil::flag(o, "appear_offline");
+    // On unless it was turned off: it came after the first copies, which kept running.
+    s.keepRunning = !json_object_object_get_ex(o, "keep_running", nullptr) || jsonutil::flag(o, "keep_running");
     s.startup = jsonutil::flag(o, "startup");
     s.saidTray = jsonutil::flag(o, "said_tray");
     const std::string sounds = jsonutil::str(o, "interface_sounds");
@@ -43,6 +45,7 @@ bool keepSettings(const std::string& folder, const Settings& s) {
     jsonutil::set(o, "full_screen", s.fullScreen);
     jsonutil::set(o, "controller", s.controller);
     jsonutil::set(o, "appear_offline", s.appearOffline);
+    jsonutil::set(o, "keep_running", s.keepRunning);
     jsonutil::set(o, "startup", s.startup);
     jsonutil::set(o, "said_tray", s.saidTray);
     jsonutil::set(o, "interface_sounds", s.sounds);

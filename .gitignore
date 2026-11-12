@@ -1,4 +1,6 @@
 /build/
+/build-mac/
+/dist/
 /vcpkg_installed/
 CMakeUserPresets.json
 CLAUDE.local.md

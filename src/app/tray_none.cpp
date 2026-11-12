@@ -1,5 +1,5 @@
-// The window's comings and goings elsewhere (tray.h): a system with neither a Mac's Dock nor Windows'
-// tray. The close button quits, as it always did, and nothing else is said.
+// The window's comings and goings elsewhere (tray.h): a system with neither a Mac's menu bar nor
+// Windows' tray. The close button quits, as it always did, and nothing else is said.
 
 #include "app/tray.h"
 
@@ -28,8 +28,10 @@ void hide(Tray::System&, SDL_Window*, const Asks&) {
     SDL_PushEvent(&e);
 }
 
-void notify(Tray::System&, const std::string&, const std::string&, const std::string&) {}
-
-std::string takeAnswer(Tray::System&) { return {}; }
+void showing(Tray::System&) {}
+bool notify(Tray::System&, const Invite&) { return false; }
+void withdraw(Tray::System&, const std::string&) {}
+void look(Tray::System&, Status, const std::string&) {}
+Reply takeReply(Tray::System&) { return {}; }
 
 }  // namespace tray

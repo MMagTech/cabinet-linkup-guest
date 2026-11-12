@@ -218,11 +218,38 @@ std::vector<Scene> scenes() {
              parts::notice(c, "Connect a controller to play", Tone::Problem);
          }},
         {"25-settings", "Settings", [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, kLinkUp, -1); }},
-        {"25a-settings-startup", "Settings, Startup on",
+        {"25a-settings-startup", "Settings, System: Keep running and Startup on",
+         [](ui::Canvas& c, float) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kSystem, 1);
+             v.startup = true;
+             v.updates = "Up to date";
+             screens::drawSettings(c, v);
+         }},
+        // Keep running Off: the close button quits, and Startup is greyed, as the console greys a row.
+        {"25c-settings-keep-running-off", "Settings, Keep running off",
          [](ui::Canvas& c, float) {
              screens::SettingsView v = settingsOf(look::Colour::Purple, kSystem, 0);
+             v.keepRunning = false;
              v.startup = true;
+             v.updates = "Up to date";
              screens::drawSettings(c, v);
+         }},
+        // A newer 2P Start on the project's Releases: Download opens its page in the browser.
+        {"25d-update-available", "Settings, an update available",
+         [](ui::Canvas& c, float) {
+             screens::SettingsView v = settingsOf(look::Colour::Purple, kSystem, 2);
+             v.updates = "Update available";
+             screens::drawSettings(c, v);
+             parts::Panel p;
+             p.title = "Update available";
+             p.detail = "Version 0.2.0";
+             p.options = {"Download", "Later"};
+             parts::panel(c, p);
+         }},
+        {"25e-update-notice", "An update found by itself",
+         [](ui::Canvas& c, float) {
+             friends(c, oneFriend(Status::Online));
+             parts::notice(c, "Update available", Tone::Info);
          }},
         {"25b-settings-display", "Settings, Display and Sound",
          [](ui::Canvas& c, float) { settings(c, look::Colour::Purple, kDisplay, 0); }},

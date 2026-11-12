@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <io.h>
@@ -67,8 +68,8 @@ bool fromHands(const SDL_Event& e) {
 }
 
 // --check-game: everything a game needs that GStreamer lacks, and its plugins that would not load,
-// a line each, and nothing when it can play. CI runs it on the Windows zip on a computer with nothing
-// else of GStreamer's (ci/check-zip.ps1).
+// a line each, and nothing when it can play. CI runs it on the installed Windows app and the Mac app on
+// a computer with nothing else of GStreamer's (ci/check-setup.ps1, ci/check-app.sh).
 int checkGame() {
     game::Game game([] {});
     int found = 0;
@@ -103,7 +104,7 @@ void keepLog(const std::string& folder) {
 
 int fail(const char* what, const std::string& why) {
     std::fprintf(stderr, "2pstart: %s: %s\n", what, why.c_str());
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "CabinetOS 2P Start", (std::string(what) + ": " + why).c_str(),
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "2P Start", (std::string(what) + ": " + why).c_str(),
                              nullptr);
     return 1;
 }
@@ -140,7 +141,14 @@ int main(int argc, char* argv[]) {
     if (!folder.empty() && tray::another(folder, atLogin)) return 0;
     keepLog(folder);
 
-    SDL_SetAppMetadata("CabinetOS 2P Start", TWOPSTART_VERSION, "io.github.mmagtech.2pstart");
+    SDL_SetAppMetadata("2P Start", TWOPSTART_VERSION, "io.github.mmagtech.2pstart");
+#ifdef _WIN32
+    // The window and the taskbar show the program's own icon (cmake/2pstart.rc.in).
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
+#endif
+    // Opened at login, it has no window, and on a Mac no Dock icon (tray.h).
+    if (atLogin) SDL_SetHint(SDL_HINT_MAC_BACKGROUND_APP, "1");
     // The close button hides the window (tray.h), and a controller is heard with another program in
     // front, for the idle rule (idle.h).
     SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
@@ -155,7 +163,7 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     const SDL_WindowFlags shown = atLogin ? SDL_WINDOW_HIDDEN : 0;
-    if (!SDL_CreateWindowAndRenderer("CabinetOS 2P Start", 1280, 720,
+    if (!SDL_CreateWindowAndRenderer("2P Start", 1280, 720,
                                      SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | shown, &window, &renderer))
         return fail("no window", SDL_GetError());
     SDL_SetWindowMinimumSize(window, 640, 360);
@@ -166,14 +174,26 @@ int main(int argc, char* argv[]) {
         bool running = true;
         App app(window, renderer, fontsFolder(), folder, wake);
         if (!app.start(why)) return fail("could not start", why);
+        const auto invites = [&app]() {
+            std::vector<tray::Invite> out;
+            for (const App::Waiting& w : app.invites()) out.push_back({w.who, w.title, w.game});
+            return out;
+        };
         tray::Asks asks;
-        asks.statusLine = [&app]() { return app.statusLine(); };
-        asks.flipStatus = [&app]() { app.flipStatus(); };
-        asks.answer = [&app](const std::string& who) { app.answerFrom(who); };
+        asks.invites = invites;
+        asks.online = [&app]() { return app.online(); };
+        asks.setOnline = [&app](bool on) {
+            if (app.online() != on) app.flipStatus();
+        };
+        asks.reply = [&app](const std::string& who, int answer) { app.reply(who, answer); };
+        asks.startup = [&app]() { return app.startupOn(); };
+        asks.canStartup = [&app]() { return app.keepRunning(); };
+        asks.flipStartup = [&app]() { app.flipStartup(); };
+        asks.keepRunning = [&app]() { return app.keepRunning(); };
         asks.sayStillRunning = [&app]() { return app.sayStillRunning(); };
         tray::Tray tray(window, folder, std::move(asks));
         app.tellInvites([&tray](const std::string& who, const std::string& line, const std::string& game) {
-            return tray.invited(who, line, game);
+            return tray.invited(tray::Invite{who, line, game});
         });
         const auto handle = [&](const SDL_Event& e) {
             if (e.type == SDL_EVENT_QUIT) running = false;
@@ -200,6 +220,7 @@ int main(int argc, char* argv[]) {
             const float dt = static_cast<float>(static_cast<double>(now - last) / 1e9);
             last = now;
             app.tick(std::min(dt, 0.25f));
+            tray.follow(invites(), app.seenOnline());
             if (tryingIt && !trying.play(dt, app, renderer)) running = false;
             // The picture alone, with no new one: nothing to draw.
             const bool liveNow = app.live() && !tryingIt;

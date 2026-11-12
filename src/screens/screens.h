@@ -71,7 +71,9 @@ struct SettingsView {
     float still = 0.0f;        // seconds since the last key, for the caret
     int colour = 0;            // one of look's sixteen
     bool fullScreen = true;
-    bool startup = false;      // the app opens at login, with no window
+    bool keepRunning = true;   // the close button hides the window, and the app stays running
+    bool startup = false;      // the app opens at login, with no window; greyed while it does not keep running
+    std::string updates;       // Check for updates' value: "Up to date", "Update available", or empty before a check
     int sounds = 2;            // Interface sounds: Off, Quiet, Medium or Loud (the console's sound.h)
     std::vector<std::string> controllers;   // the ones connected, by name
     int controller = 0;                     // which of them plays
@@ -84,7 +86,9 @@ struct SettingsView {
 };
 // Every row, wherever it sits.
 namespace setting {
-enum Row : int { Name, Server, Controller, Colour, FullScreen, Sounds, Startup, Version, HowTo, Credits, Count };
+enum Row : int {
+    Name, Server, Controller, Colour, FullScreen, Sounds, KeepRunning, Startup, Updates, Version, HowTo, Credits, Count
+};
 }
 // The categories, in order, and their rows in order.
 struct SettingsCategory {
@@ -92,8 +96,9 @@ struct SettingsCategory {
     std::vector<setting::Row> rows;
 };
 const std::vector<SettingsCategory>& settingsCategories();
-// Whether a row takes focus: Version is only read.
-bool settingFocusable(setting::Row row);
+// Whether a row takes focus: Version is only read, and Startup is greyed while the app does not keep
+// running.
+bool settingFocusable(setting::Row row, const SettingsView& v);
 void drawSettings(ui::Canvas& c, const SettingsView& v);
 
 // Credits and licenses: a list over Settings, one line for each project whose work is in the app,

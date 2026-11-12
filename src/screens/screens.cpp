@@ -315,13 +315,16 @@ const std::vector<SettingsCategory>& settingsCategories() {
         {"LinkUp", {setting::Name, setting::Server}},
         {"Controllers", {setting::Controller}},
         {"Display and Sound", {setting::Colour, setting::FullScreen, setting::Sounds}},
-        {"System", {setting::Startup}},
+        {"System", {setting::KeepRunning, setting::Startup, setting::Updates}},
         {"About", {setting::Version, setting::HowTo, setting::Credits}},
     };
     return kCategories;
 }
 
-bool settingFocusable(setting::Row row) { return row != setting::Version; }
+bool settingFocusable(setting::Row row, const SettingsView& v) {
+    if (row == setting::Startup) return v.keepRunning;
+    return row != setting::Version;
+}
 
 namespace {
 
@@ -381,7 +384,17 @@ parts::Row settingRow(setting::Row id, const SettingsView& v) {
             r.canRight = level + 1 < sound::kLevelCount;
             return r;
         }
-        case setting::Startup: return {"Startup", v.startup ? "On" : "Off"};
+        case setting::KeepRunning: return {"Keep running", v.keepRunning ? "On" : "Off"};
+        case setting::Startup: {
+            parts::Row r{"Startup", v.startup && v.keepRunning ? "On" : "Off"};
+            r.greyed = !v.keepRunning;
+            return r;
+        }
+        case setting::Updates: {
+            parts::Row r{"Check for updates", v.updates};
+            r.opens = true;
+            return r;
+        }
         case setting::Version: return {"Version", v.version};
         case setting::HowTo: {
             parts::Row r{"How to", ""};
@@ -434,7 +447,7 @@ void drawSettings(ui::Canvas& c, const SettingsView& v) {
         r.still = v.still;
         const float ry = parts::kContentTop + static_cast<float>(i) * (parts::kRowHeight + kPaneRowGap);
         parts::row(c, paneX, ry, paneW, r, v.focus == i && !v.barFocused ? 1.0f : 0.0f);
-        if (settingFocusable(id)) c.spot(parts::spot::kItem + id, paneX, ry, paneW, parts::kRowHeight);
+        if (settingFocusable(id, v)) c.spot(parts::spot::kItem + id, paneX, ry, paneW, parts::kRowHeight);
     }
 }
 

@@ -2,13 +2,14 @@
 // so invites reach them with nothing to remember. Off at first; what the row says is kept in
 // settings.json, and the computer's own entry follows it.
 //
-// The entry is the computer's way for a program that is not yet packaged, and starts this program
-// where it is now:
-//   macOS     a launch agent, ~/Library/LaunchAgents/io.github.mmagtech.2pstart.plist
-//   Windows   a value under HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-// Once 2P Start is packaged (piece F), each moves to the package's own: on a Mac, SMAppService for
-// the .app (System Settings lists it under Open at Login by its name); on Windows, the StartupTask in
-// the MSIX's manifest, with the zip keeping the Run value. The app then removes its old entry.
+// The entry is each system's own, and starts this program where it is now:
+//   macOS     inside the app, its own Login Item (SMAppService, with the launch agent the app carries,
+//             cmake/launch-agent.plist), which System Settings lists by its name and which follows
+//             the app wherever it is moved; run as a bare program, as while it is worked on, a launch
+//             agent of its own, ~/Library/LaunchAgents/io.github.mmagtech.2pstart.plist
+//   Windows   a value under HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run, written
+//             again at each start, so it follows the program wherever it is
+// The app inside the Mac app takes away the launch agent a bare copy wrote.
 
 #pragma once
 
@@ -29,5 +30,9 @@ std::string agent(const std::string& program);
 bool setAgent(const std::string& folder, const std::string& program, bool on, std::string& why);
 // The Run value that starts `program` with --startup, in UTF-8: the path quoted, as Windows wants it.
 std::string runValue(const std::string& program);
+
+// Inside the Mac app (startup_mac.mm): whether this is one, and its Login Item set on or off.
+bool inApp();
+bool setLoginItem(bool on, std::string& why);
 
 }  // namespace startup

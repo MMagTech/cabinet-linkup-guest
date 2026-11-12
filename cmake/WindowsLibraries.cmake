@@ -1,7 +1,7 @@
-# The libraries the Windows zip needs, at install time (CMakeLists.txt): those the app and its
+# The libraries the Windows app needs, at install time (CMakeLists.txt): those the app and its
 # GStreamer plugins name, and those those name, all the way down, each from GStreamer's own folder.
 # What Windows itself has stays out. Anything found elsewhere, or not found, stops the install, so
-# the zip never carries a stray copy from whatever else is on the computer that built it.
+# the app never carries a stray copy from whatever else is on the computer that built it.
 #
 # Paths are read with / between their parts, whichever way Windows writes them.
 if(POLICY CMP0207)
@@ -21,7 +21,7 @@ file(GET_RUNTIME_DEPENDENCIES
     UNRESOLVED_DEPENDENCIES_VAR missing)
 
 if(missing)
-    message(FATAL_ERROR "Libraries the zip needs that were not found: ${missing}")
+    message(FATAL_ERROR "Libraries the app needs that were not found: ${missing}")
 endif()
 
 string(TOLOWER "${TWOPSTART_GST_BIN}/" gst_bin)
@@ -35,9 +35,9 @@ foreach(library IN LISTS found)
     endif()
 endforeach()
 if(stray)
-    message(FATAL_ERROR "Libraries found outside GStreamer's folder, which the zip will not carry: ${stray}")
+    message(FATAL_ERROR "Libraries found outside GStreamer's folder, which the app will not carry: ${stray}")
 endif()
 
 list(LENGTH found count)
-message(STATUS "GStreamer's libraries in the zip: ${count}")
+message(STATUS "GStreamer's libraries in the app: ${count}")
 file(INSTALL ${found} DESTINATION "${CMAKE_INSTALL_PREFIX}")

@@ -1,13 +1,14 @@
 {
     "name": "cabinet-linkup-guest",
-    "version-string": "0.0.1",
+    "version-string": "0.1.0",
     "dependencies": [
         "json-c",
         "sdl3",
         "sdl3-ttf",
         {
-            "$comment": "ssl is Windows' own TLS, Schannel, so the app carries no second TLS library.",
+            "$comment": "Windows only: ssl is Windows' own TLS, Schannel, so the app carries no second TLS library. A Mac has curl of its own.",
             "name": "curl",
+            "platform": "windows",
             "default-features": false,
             "features": [
                 "ssl"

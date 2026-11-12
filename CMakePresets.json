@@ -10,6 +10,20 @@
             "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
         },
         {
+            "name": "mac",
+            "displayName": "macOS, the app to hand out: vcpkg, Apple silicon, macOS 13 or later",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-mac",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "VCPKG_TARGET_TRIPLET": "arm64-osx-13",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0"
+            }
+        },
+        {
             "name": "windows",
             "displayName": "Windows, with vcpkg and GStreamer's OpenSSL",
             "binaryDir": "${sourceDir}/build",
@@ -19,12 +33,18 @@
     ],
     "buildPresets": [
         { "name": "default", "configurePreset": "default" },
+        { "name": "mac", "configurePreset": "mac" },
         { "name": "windows", "configurePreset": "windows", "configuration": "Release" }
     ],
     "testPresets": [
         {
             "name": "default",
             "configurePreset": "default",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "mac",
+            "configurePreset": "mac",
             "output": { "outputOnFailure": true }
         },
         {
