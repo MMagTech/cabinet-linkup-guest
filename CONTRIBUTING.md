@@ -14,7 +14,7 @@ since the repository is public.
 - [x] The app's window on macOS: pairing, the list of friends, an invite, Settings
 - [x] Picture, sound and a controller on macOS
 - [x] The Mac app, in a DMG, with its menu bar icon
-- [ ] The same on Windows, with its Setup and its tray: built by CI, not yet run on a PC
+- [x] The same on Windows, with its Setup and its tray
 
 ## How it is built
 
