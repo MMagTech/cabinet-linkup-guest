@@ -290,9 +290,62 @@ Stream::Losses Stream::pictureLosses() {
     gst_structure_get_uint64(stats, "num-pushed", &out.in);
     gst_structure_get_uint64(stats, "num-lost", &out.lost);
     gst_structure_get_uint64(stats, "num-late", &out.late);
+    gst_structure_get_uint64(stats, "num-duplicates", &out.duplicates);
     gst_structure_get_uint64(stats, "rtx-count", &out.resent);
     gst_structure_get_uint64(stats, "rtx-success-count", &out.resentCame);
     gst_structure_free(stats);
+    return out;
+}
+
+namespace {
+
+// Whether a description names a resend stream (rtx) for the picture.
+bool namesResends(const GstWebRTCSessionDescription* d) {
+    if (!d || !d->sdp) return false;
+    for (guint i = 0; i < gst_sdp_message_medias_len(d->sdp); ++i) {
+        const GstSDPMedia* m = gst_sdp_message_get_media(d->sdp, i);
+        if (g_strcmp0(gst_sdp_media_get_media(m), "video") != 0) continue;
+        for (guint a = 0;; ++a) {
+            const gchar* v = gst_sdp_media_get_attribute_val_n(m, "rtpmap", a);
+            if (!v) break;
+            if (g_strrstr(v, "rtx/")) return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
+void Stream::sayResends() {
+    if (!webrtc_) return;
+    GstWebRTCSessionDescription *offer = nullptr, *answer = nullptr;
+    g_object_get(webrtc_, "remote-description", &offer, "local-description", &answer, nullptr);
+    std::fprintf(stderr, "[game] resends for the picture: the host %s them, this app %s\n",
+                 namesResends(offer) ? "offers" : "does not offer", namesResends(answer) ? "takes them" : "does not");
+    if (offer) gst_webrtc_session_description_free(offer);
+    if (answer) gst_webrtc_session_description_free(answer);
+}
+
+Stream::Resends Stream::resends() {
+    Resends out;
+    if (!pipeline_) return out;
+    GstIterator* it = gst_bin_iterate_recurse(GST_BIN(pipeline_));
+    GValue item = G_VALUE_INIT;
+    while (gst_iterator_next(it, &item) == GST_ITERATOR_OK) {
+        GstElement* e = GST_ELEMENT(g_value_get_object(&item));
+        GstElementFactory* f = gst_element_get_factory(e);
+        if (f && g_strcmp0(GST_OBJECT_NAME(f), "rtprtxreceive") == 0) {
+            guint asked = 0, came = 0, matched = 0;
+            g_object_get(e, "num-rtx-requests", &asked, "num-rtx-packets", &came, "num-rtx-assoc-packets", &matched, nullptr);
+            out.receiver = true;
+            out.asked += asked;
+            out.came += came;
+            out.matched += matched;
+        }
+        g_value_reset(&item);
+    }
+    g_value_unset(&item);
+    gst_iterator_free(it);
     return out;
 }
 
@@ -349,10 +402,15 @@ void Stream::stop() {
     if (!pipeline_) return;
     std::fprintf(stderr, "[game] %u pictures decoded, asked for a full one %u times\n", decoded_.load(), asks_);
     const Losses l = pictureLosses();
-    std::fprintf(stderr, "[game] picture packets: %llu in, %llu lost, %llu late, %llu resends asked, %llu came\n",
+    std::fprintf(stderr, "[game] picture packets: %llu in, %llu lost, %llu late, %llu twice, %llu resends asked, %llu came in time\n",
                  static_cast<unsigned long long>(l.in), static_cast<unsigned long long>(l.lost),
-                 static_cast<unsigned long long>(l.late), static_cast<unsigned long long>(l.resent),
-                 static_cast<unsigned long long>(l.resentCame));
+                 static_cast<unsigned long long>(l.late), static_cast<unsigned long long>(l.duplicates),
+                 static_cast<unsigned long long>(l.resent), static_cast<unsigned long long>(l.resentCame));
+    const Resends r = resends();
+    if (r.receiver)
+        std::fprintf(stderr, "[game] resends: %u asked of the host, %u came at all, %u matched to an ask\n", r.asked, r.came, r.matched);
+    else
+        std::fprintf(stderr, "[game] resends: none can come, there is no resend receiver\n");
     gst_element_set_state(pipeline_, GST_STATE_NULL);
     if (sound_.running()) {
         const SoundQueue::Stats s = sound_.stats();

@@ -64,6 +64,9 @@ public:
     bool start(const Rtc::Paths& paths);
     void stop();
     Rtc* rtc() { return rtc_.get(); }
+    // Says in the log whether the host offered resends for the picture, and whether this app took
+    // them, once the two have agreed how to talk.
+    void sayResends();
 
     // What a stream needs that GStreamer does not have, by name: empty when it can play. The decoder
     // is among them, so a computer that cannot decode H.264 in its graphics chip lacks it.
@@ -82,9 +85,15 @@ private:
     // The picture's jitter buffer's count: packets in, lost for good, come too late, and resends
     // asked for and those that came.
     struct Losses {
-        guint64 in = 0, lost = 0, late = 0, resent = 0, resentCame = 0;
+        guint64 in = 0, lost = 0, late = 0, duplicates = 0, resent = 0, resentCame = 0;
     };
     Losses pictureLosses();
+    // Resent packets that arrived at all, from webrtcbin's resend receivers, and whether there are any.
+    struct Resends {
+        bool receiver = false;
+        guint asked = 0, came = 0, matched = 0;
+    };
+    Resends resends();
     static gboolean onBus(GstBus*, GstMessage* m, gpointer self);
     static GstPadProbeReturn onPacket(GstPad*, GstPadProbeInfo*, gpointer self);
     static GstPadProbeReturn onPicture(GstPad*, GstPadProbeInfo*, gpointer self);

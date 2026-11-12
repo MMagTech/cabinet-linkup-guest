@@ -379,6 +379,7 @@ Rtc::Hooks Game::Loop::makeHooks() {
         session_->connected = true;
         session_->path = path;
         std::fprintf(stderr, "[game] connected: %s\n", path.c_str());
+        if (session_->stream) session_->stream->sayResends();
         Event e;
         e.kind = Event::Kind::Connected;
         e.text = path;
