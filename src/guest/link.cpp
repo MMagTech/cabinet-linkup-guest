@@ -150,6 +150,7 @@ void Link::pair(const std::string& address, const std::string& code, const std::
         jsonutil::set(j, "stream", ServerLink::kStream);
         jsonutil::set(j, "account", account);
         jsonutil::set(j, "username", username);
+        jsonutil::set(j, "hosts", false);  // 2P Start only joins (PROTOCOL.md, Who is joining)
         std::string serverName;
         e.pairResult = pairing::pair(keys_, address, code, textOf(j), serverName);
         e.server = serverName;
@@ -421,6 +422,7 @@ void Link::signInNow() {
     jsonutil::set(q, "account", account);
     jsonutil::set(q, "username", name);
     jsonutil::set(q, "status", status_);
+    jsonutil::set(q, "hosts", false);
     std::string answer;
     const ServerLink::Outcome outcome = link_.call(textOf(q), answer);
     setConnection(outcome);
