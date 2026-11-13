@@ -54,7 +54,9 @@ call from a part into one it must not know does not link.
 ## Each system's own
 
 What differs between systems sits in a few places, each with a stand-in that builds anywhere, so a
-new system can run before it has all of them.
+new system can run before it has all of them. CI's Linux job builds them and runs the tests on every
+pull request, with no game, so `none.cpp` stands in for `src/game/` there. Linux is not shipped
+([linux-built-not-shipped](decisions/2026-11-12-linux-built-not-shipped.md)).
 
 | Place | Mac and Windows | The stand-in elsewhere |
 |---|---|---|

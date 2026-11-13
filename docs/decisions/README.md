@@ -49,3 +49,4 @@ One line per file, in the form `- [name](file.md): the decision in a few words.`
 
 - [mac-ships-unsigned](2026-11-12-mac-ships-unsigned.md): the Mac app is not signed by Apple or notarized; friends press Open Anyway once.
 - [checks-hold-the-structure](2026-11-12-checks-hold-the-structure.md): CI reads for long files and for docs and comments that name what is not there, as CabinetOS learned to.
+- [linux-built-not-shipped](2026-11-12-linux-built-not-shipped.md): CI builds and tests 2P Start on Linux with no game, on Ubuntu's own packages; no Linux package is made.
