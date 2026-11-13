@@ -243,10 +243,20 @@ else()
 endif()
 target_link_libraries(app_core PUBLIC app_system)
 
-# The app: its window, and what each press does. On Windows it opens with no console window behind
-# it, and carries its icons (cmake/2pstart.rc.in, from icon/). The fonts go beside it, and on a Mac
-# the menu bar's pictures with them.
-add_executable(2pstart WIN32 src/app/main.cpp src/app/app.cpp src/app/session.cpp src/app/trying.cpp)
+# The app: its window, and what each press does, in files named for their jobs. On Windows it opens
+# with no console window behind it, and carries its icons (cmake/2pstart.rc.in, from icon/). The fonts
+# go beside it, and on a Mac the menu bar's pictures with them.
+add_executable(2pstart WIN32
+    src/app/main.cpp
+    src/app/app.cpp
+    src/app/moving.cpp
+    src/app/mouse.cpp
+    src/app/typing.cpp
+    src/app/session.cpp
+    src/app/updatecheck.cpp
+    src/app/controllers.cpp
+    src/app/fortray.cpp
+    src/app/trying.cpp)
 target_link_libraries(2pstart PRIVATE app_core game)
 add_custom_command(TARGET 2pstart POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:2pstart>/assets")

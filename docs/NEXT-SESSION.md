@@ -11,34 +11,36 @@ Name every issue and pull request by its title as well as its number. Every sess
 ## Where things stand
 
 **2026-11-13.** The newest release is 2P Start 0.1.1, published on 2026-11-13, for a Mac with Apple
-silicon and a Windows PC. No pull request or issue is open. What comes next is below, in order.
+silicon and a Windows PC. No source file is over 1,500 lines. No pull request or issue is open. What
+comes next is below.
 
 The latest merges, newest first:
 
+- #19, "The window's code is split into files named for their jobs", for #18, "Split app.cpp into
+  files named for their jobs". `src/app/app.cpp` keeps its start, the server, a frame, the hands and
+  what happens; the rest of the window is in `moving.cpp`, `mouse.cpp`, `typing.cpp`,
+  `updatecheck.cpp`, `controllers.cpp` and `fortray.cpp` beside it, with `shared.h`. It only moved
+  code. A change that should change nothing on screen can be checked as it was: the gallery's
+  pictures, and `2pstart --folder <a new folder> --try <steps>` (trying.h), saved before and after
+  and compared byte for byte.
+- #17, "NEXT-SESSION.md says where 2P Start stands and what waits".
 - #16, "Linux is built and tested in CI, so the stand-ins keep building". Linux is built, never
   shipped.
 - #15, "The rules, the map and two checks, so 2P Start stays easy to work on".
-- #14, "2P Start 0.1.1: a friend's code works on any computer".
-- #13, "2P Start says it only joins, so it is never offered to another as a friend".
+
+In cabinet-linkup, MMagTech/cabinet-linkup#15, "PROTOCOL.md: what two consoles say to each other once
+a game starts", merged on 2026-11-13: the stream between host and friend is written down there now.
 
 ## Next
 
-In this order, agreed with MMagTech on 2026-11-13:
-
-1. **`src/app/app.cpp` split** (1,610 lines) into files named for their jobs: moving around the
-   screens, typing, the mouse, Check for updates, the controllers and the tray. It only moves code:
-   nothing a friend sees changes. The gallery's pictures are the same before and after, and MMagTech
-   tries the app (typing, a right-click, a controller, the tray) before it merges.
-2. **A porting guide**, once the split has merged, so it names the files as they stay: for someone
-   building a 2P Start for another system or frontend, from [ARCHITECTURE.md](ARCHITECTURE.md),
-   "Each system's own", the Linux build in CI, and the rules
+1. **A porting guide**, for someone building a 2P Start for another system or frontend, now that the
+   files it names stay put. From the Linux build in CI; the places in
+   [ARCHITECTURE.md](ARCHITECTURE.md), "Each system's own", and what each must do; how to add a
+   package and a CI job; and the rules: it only joins and sends `"hosts": false`, and it is not called
+   "CabinetOS 2P Start"
    ([variations-by-a-written-contract](decisions/2026-11-12-variations-by-a-written-contract.md)).
-
-Alongside, in cabinet-linkup, once MMagTech says go: **the stream between host and friend, written
-down** in its `PROTOCOL.md`: the data channels, the pad's bytes in a fixed order, the hello. Today it
-lives only in the console's code, `cabinetos/linkup/rtc.h`, `cabinetos/linkup/conductor.cpp` and
-`cabinetos/frontend/src/linkup_wire.h`. Words only: nothing in the server, the console or 2P Start
-changes.
+   Ask MMagTech where it goes before making a new file under `docs/`. One pull request, which rewrites
+   this file.
 
 ## Dates
 
