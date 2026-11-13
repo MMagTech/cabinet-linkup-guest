@@ -106,6 +106,7 @@ bool signIn(ServerLink& link, const std::string& folder) {
     jsonutil::set(q, "account", account);
     jsonutil::set(q, "username", name);
     jsonutil::set(q, "status", "online");
+    jsonutil::set(q, "hosts", false);
     std::string answer;
     return ask(link, q, answer);
 }
@@ -151,6 +152,7 @@ int pair(Keys& keys, const std::string& folder, const std::string& address, cons
     jsonutil::set(j, "stream", ServerLink::kStream);
     jsonutil::set(j, "account", account);
     jsonutil::set(j, "username", name);
+    jsonutil::set(j, "hosts", false);  // 2P Start only joins (PROTOCOL.md, Who is joining)
     std::string serverName;
     const pairing::Result result = pairing::pair(keys, address, code, jsonutil::text(j), serverName);
     json_object_put(j);
