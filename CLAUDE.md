@@ -7,6 +7,9 @@ The console's own LinkUp code comes in from CabinetOS as the `cabinetos/` submod
 commit, so there is one copy of the protocol. Nothing in `cabinetos/` is edited here. What a console
 and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
 
+Not a session with MMagTech, such as someone porting 2P Start? [AGENTS.md](AGENTS.md) and
+[docs/PORTING.md](docs/PORTING.md) are yours. "Rules for every change", below, are his.
+
 ## Read first
 
 1. [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, what CI checks, and the project's rules.

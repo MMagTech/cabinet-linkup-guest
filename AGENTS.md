@@ -7,13 +7,20 @@ joins, and never hosts. A person reviews every pull request. Read these before c
 2. `docs/ARCHITECTURE.md`: where each job lives, what each part must never do, and each system's own
    places.
 3. `docs/decisions/README.md`: what was decided and why. Look there before proposing a change.
+4. `docs/PORTING.md`, for a 2P Start on another system or frontend: the rules, where to start, and
+   what each system fills in.
 
 ## Before you write code
 
 - **A small fix needs no issue:** a few lines that put back what was meant to work.
-- **Anything new needs an issue MMagTech has agreed to first:** a feature, a new system, a new file or
-  folder, a change to the build or CI, a refactor across files. Ask your person to open it; you may
-  draft it.
+- **Anything new for this repository needs an issue MMagTech has agreed to first**, before the work:
+  a feature, a new system, a new file or folder, a change to the build or CI, a refactor across
+  files. Ask your person to open it; you may draft it.
+- **Helping someone port it?** A copy of their own needs nothing from here. If it is meant to be
+  added here, tell your person at the start, before the work, that it needs an issue first: the "A
+  2P Start for another system" form,
+  https://github.com/MMagTech/cabinet-linkup-guest/issues/new?template=another-system.yml. Draft it
+  for them. `docs/PORTING.md` has the rest.
 - **Nothing in `cabinetos/` is edited.** It is CabinetOS at a pinned commit, the one copy of the
   protocol.
 - **It only joins.** Nothing you write hosts a game, and anything that joins a server sends

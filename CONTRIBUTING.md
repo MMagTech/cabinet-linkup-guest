@@ -1,7 +1,8 @@
 # Working on 2P Start
 
 This is for people who want to build 2P Start, try it, or change one thing,
-and for anyone making a 2P Start of their own for another system or frontend.
+and for anyone making a 2P Start of their own for another system or frontend,
+who start at [docs/PORTING.md](docs/PORTING.md).
 Read [The rules](#the-rules) below, then
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for where each job lives, and
 [docs/decisions/](docs/decisions/README.md) for what was decided and why. AI
@@ -35,14 +36,16 @@ tools start at [AGENTS.md](AGENTS.md).
 
 ## Pull requests and issues
 
-- **Ask first for anything new.** A fix of a few lines that puts back what was
-  meant to work goes straight to a pull request. A feature, a new system, a
-  new file or folder, a change to the build or CI, or a refactor across files
-  needs an issue MMagTech has agreed to first, linked from the pull request.
-- **A 2P Start for another system or frontend** starts with the "A 2P Start
-  for another system" issue form, whether it would live here or in a
-  repository of your own. Yours is yours to name, but not "CabinetOS 2P
-  Start": say it works with CabinetOS LinkUp.
+- **Ask first for anything new you would send here.** A fix of a few lines
+  that puts back what was meant to work goes straight to a pull request. A
+  feature, a new system, a new file or folder, a change to the build or CI,
+  or a refactor across files needs an issue MMagTech has agreed to first,
+  before the work, linked from the pull request.
+- **A 2P Start for another system or frontend**, in a repository of your
+  own, needs no one's leave. To add one here, open the "A 2P Start for
+  another system" issue form first. Yours is yours to name, but not
+  "CabinetOS 2P Start": say it works with CabinetOS LinkUp.
+  [docs/PORTING.md](docs/PORTING.md) says the rest.
 - **AI-assisted pull requests are welcome**; 2P Start is built with AI too. A
   person reads it, sends it and answers for it, and the pull request says
   which tool helped and what was checked.
@@ -109,8 +112,8 @@ also uninstalls). And a read of every tracked file for anything private (`ci/che
 
 On Linux, which is not shipped: the build with no game (`-DTWOPSTART_GAME=OFF`), the tests and the
 screens, on Ubuntu 26.04's own packages, which the workflow's Linux job names. It keeps the stand-ins
-another system starts from building ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), "Each system's
-own").
+another system starts from building ([docs/PORTING.md](docs/PORTING.md), "Start from the Linux
+build").
 
 Two more hold the structure, as CabinetOS learned to
 ([checks-hold-the-structure](docs/decisions/2026-11-12-checks-hold-the-structure.md)):

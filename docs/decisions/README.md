@@ -50,3 +50,5 @@ One line per file, in the form `- [name](file.md): the decision in a few words.`
 - [mac-ships-unsigned](2026-11-12-mac-ships-unsigned.md): the Mac app is not signed by Apple or notarized; friends press Open Anyway once.
 - [checks-hold-the-structure](2026-11-12-checks-hold-the-structure.md): CI reads for long files and for docs and comments that name what is not there, as CabinetOS learned to.
 - [linux-built-not-shipped](2026-11-12-linux-built-not-shipped.md): CI builds and tests 2P Start on Linux with no game, on Ubuntu's own packages; no Linux package is made.
+- [porting-guide-a-page-of-its-own](2026-11-13-porting-guide-a-page-of-its-own.md): what someone porting 2P Start needs is one page, `docs/PORTING.md`, not a section of `CONTRIBUTING.md`.
+- [ask-first-only-to-add-here](2026-11-13-ask-first-only-to-add-here.md): a copy of one's own needs no one's leave; a new system to be added here is asked about first, on an issue, before the work.
