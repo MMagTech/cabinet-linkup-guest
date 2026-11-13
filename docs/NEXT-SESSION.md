@@ -43,8 +43,6 @@ Only if someone starts a 2P Start for another system or frontend
   channels, the pad's bytes in a fixed order, the hello. Today it lives only in the console's code,
   `cabinetos/linkup/rtc.h`, `cabinetos/linkup/conductor.cpp` and
   `cabinetos/frontend/src/linkup_wire.h`.
-- **A host with no console**, in CabinetOS, that sends a test picture and a tone, so a port can be
-  proven end to end.
 - **A smaller picture for a handheld.** The hello names codecs, not a size: a field added to the
   stream, on the console's side first.
 - **A porting guide** beyond [ARCHITECTURE.md](ARCHITECTURE.md), "Each system's own".
