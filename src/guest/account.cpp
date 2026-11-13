@@ -6,11 +6,11 @@
 #include <cstdint>
 #include <vector>
 
-#include <openssl/rand.h>
-
 #include "box.h"
 #include "fileio.h"
 #include "hexutil.h"
+#include "noise.h"
+#include "pairing.h"
 
 namespace guest {
 
@@ -21,16 +21,26 @@ constexpr size_t kIdBytes = 16;
 }  // namespace
 
 std::string accountId(const std::string& folder) {
-    const std::string path = folder + "/account";
-    const std::vector<uint8_t> held = cab::readBytes(path);
+    const std::vector<uint8_t> held = cab::readBytes(folder + "/account");
     std::array<uint8_t, kIdBytes> raw{};
     const std::string kept(held.begin(), held.end());
-    if (hexutil::decode(kept, raw)) return kept;
+    return hexutil::decode(kept, raw) ? kept : std::string();
+}
 
-    if (RAND_bytes(raw.data(), static_cast<int>(raw.size())) != 1) return {};
-    const std::string made = hexutil::encode(raw.data(), raw.size());
-    if (!cab::writeBytes(path, made, 0600)) return {};
-    return made;
+std::string accountFor(const std::string& folder, const std::string& code) {
+    const std::string kept = accountId(folder);
+    if (!kept.empty()) return kept;
+    // Tidied as pairing tidies it, so however it was typed, one code gives one id.
+    const std::string twelve = pairing::tidy(code);
+    if (twelve.empty()) return {};
+    const noise::Key sum = noise::sha256("2P Start account 1|" + twelve);
+    return hexutil::encode(sum.data(), kIdBytes);
+}
+
+bool keepAccount(const std::string& folder, const std::string& id) {
+    std::array<uint8_t, kIdBytes> raw{};
+    if (!accountId(folder).empty()) return true;
+    return hexutil::decode(id, raw) && cab::writeBytes(folder + "/account", id, 0600);
 }
 
 std::string username(const std::string& folder) {

@@ -79,8 +79,9 @@ xattr -dr com.apple.quarantine "/Applications/2P Start.app"
 ```
 
 When it asks to send notifications, press Allow: that is how an invite reaches
-you with the window closed. After an update, do steps 3 and 4 again, or the
-line again.
+you with the window closed. To update, quit 2P Start from its menu bar icon
+first, or the Mac opens the one still running; then do steps 1 to 4 again, or
+the line again.
 
 ### On Windows
 
@@ -105,7 +106,9 @@ the old one, and keeps your pairing.
 ### The first time it opens
 
 It asks for your friend's LinkUp server, the code, and a name. Then your
-friend's console lists you, and you see your friends. Closing the window
+friend's console lists you, and you see your friends. Keep the code: it is
+yours now. On another computer, or after removing 2P Start, pair with it again
+and your friends are there. Closing the window
 leaves 2P Start running, in the tray or the menu bar, so invites still reach
 you; Settings, System, Keep running changes that.
 

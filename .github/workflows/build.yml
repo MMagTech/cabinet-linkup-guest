@@ -235,6 +235,13 @@ jobs:
       - name: The Setup, tried
         shell: pwsh
         run: ci/check-setup.ps1 "dist\2P Start Setup.exe"
+      - name: The icons, as Windows shows them
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: icons-windows
+          path: ${{ runner.temp }}/windows-icons
+          if-no-files-found: ignore
       - name: The Setup, kept
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:

@@ -1,9 +1,12 @@
 # The Windows Setup, as a friend runs it: installed for this person alone, then the app run from
 # where it went with nothing of GStreamer's on the path, as on a PC that has never had it. The app
 # must start and find every part a game needs, and every plugin must load (2P Start --check-game says
-# what it lacks, a line each); every line of Credits must have its licence text. Then it is
-# uninstalled, which must take the app, its Start menu entry, its Startup entry and its name for
-# notifications, and keep the friend's pairing, as a silent uninstall asks nothing.
+# what it lacks, a line each); every line of Credits must have its licence text. Its icons must be
+# ones Windows can read at the sizes the window, the taskbar and the tray ask for, and its window,
+# opened from the Start menu entry, must carry the program's own; a picture of the screen is kept
+# beside what Windows hands the window, in RUNNER_TEMP\windows-icons. Then it is uninstalled, which
+# must take the app, its Start menu entry, its Startup entry and its name for notifications, and keep
+# the friend's pairing, as a silent uninstall asks nothing.
 #
 # The runner has no graphics chip that decodes H.264, so the decoder is the one part it may lack
 # here. Whether a real PC's decodes is seen on one.
@@ -59,6 +62,82 @@ $wrong = @($said | Where-Object { $_ -ne 'lacks d3d11h264dec' })
 if ($wrong.Count -gt 0) { throw "The app lacks what a game needs: $($wrong -join '; ')" }
 "The installed app starts on its own and has every part a game needs, but the graphics chip's decoder."
 
+# The icons, as Windows reads them (cmake/2pstart.rc.in): the program's own, 1, and the tray's two.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Icons {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
+    [DllImport("kernel32.dll")]
+    public static extern bool FreeLibrary(IntPtr module);
+    [DllImport("user32.dll")]
+    static extern IntPtr LoadImageW(IntPtr module, IntPtr name, uint type, int cx, int cy, uint flags);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetClassLongPtrW(IntPtr window, int index);
+    [DllImport("user32.dll")]
+    public static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr w, IntPtr l);
+    public static bool Reads(IntPtr module, int id, int size) {
+        return LoadImageW(module, new IntPtr(id), 1, size, size, 0) != IntPtr.Zero;   // IMAGE_ICON
+    }
+}
+'@
+$module = [Icons]::LoadLibraryExW($app, [IntPtr]::Zero, 0x22)   # as a data file, for its resources
+if ($module -eq [IntPtr]::Zero) { throw "Windows cannot open 2P Start.exe to read its icons" }
+$unread = @(foreach ($id in 1, 2, 3) { foreach ($size in 16, 20, 24, 32, 40, 48) {
+    if (-not [Icons]::Reads($module, $id, $size)) { "icon $id at $size" } } })
+# Let go of it, or the uninstaller cannot delete it.
+[Icons]::FreeLibrary($module) | Out-Null
+if ($unread.Count -gt 0) { throw "Windows cannot read 2P Start's icons: $($unread -join ', ')" }
+
+# Its window, opened from the Start menu entry as a friend opens it, which gives the taskbar the app's
+# name (ci/windows-setup.iss). The class icons are what the title bar shows; the picture of the screen
+# shows the taskbar's button too. Then it is closed, with its folder.
+Add-Type -AssemblyName System.Drawing, System.Windows.Forms
+$pictures = Join-Path $env:RUNNER_TEMP 'windows-icons'
+New-Item -ItemType Directory -Force $pictures | Out-Null
+Start-Process -FilePath $entry
+$opened = $null
+$window = [IntPtr]::Zero
+for ($i = 0; $i -lt 40 -and $window -eq [IntPtr]::Zero; $i++) {
+    Start-Sleep -Milliseconds 500
+    $opened = Get-Process | Where-Object { $_.Path -eq $app } | Select-Object -First 1
+    if ($opened) { $window = $opened.MainWindowHandle }
+}
+$handed = [ordered]@{}
+if ($window -ne [IntPtr]::Zero) {
+    Start-Sleep -Seconds 3   # drawn, and its taskbar button with it
+    $handed['class-big'] = [Icons]::GetClassLongPtrW($window, -14)
+    $handed['class-small'] = [Icons]::GetClassLongPtrW($window, -34)
+    $handed['sent-small'] = [Icons]::SendMessageW($window, 0x7F, [IntPtr]2, [IntPtr]::Zero)   # WM_GETICON
+    $handed['sent-big'] = [Icons]::SendMessageW($window, 0x7F, [IntPtr]1, [IntPtr]::Zero)
+    foreach ($h in $handed.GetEnumerator()) {
+        "  {0}: {1}" -f $h.Key, $h.Value
+        if ($h.Value -ne [IntPtr]::Zero) {
+            [System.Drawing.Icon]::FromHandle($h.Value).ToBitmap().Save((Join-Path $pictures "$($h.Key).png"))
+        }
+    }
+    $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $shot = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+    [System.Drawing.Graphics]::FromImage($shot).CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+    $shot.Save((Join-Path $pictures 'screen.png'))
+}
+$title = if ($opened) { $opened.MainWindowTitle } else { '' }
+# Closed, with what it started from its folder, such as GStreamer's plugin scanner, or uninstalling
+# cannot take the folder.
+Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($installed, 'OrdinalIgnoreCase') } | ForEach-Object {
+    "  closing {0}" -f $_.Path
+    Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+    $_.WaitForExit(10000) | Out-Null
+}
+Get-Content (Join-Path $data '2pstart.log') -ErrorAction SilentlyContinue | ForEach-Object { "  $_" }
+Remove-Item $data -Recurse -Force -ErrorAction SilentlyContinue
+if ($window -eq [IntPtr]::Zero) { throw "2P Start opened no window in 20 seconds" }
+if ($handed['class-big'] -eq [IntPtr]::Zero -or $handed['class-small'] -eq [IntPtr]::Zero) {
+    throw "2P Start's window ('$title') has no icon of its own"
+}
+"Windows reads every icon at every size asked, and the window carries the program's own."
+
 # What the app itself leaves, as it would after a friend's use: a pairing, Startup on, and the name.
 New-Item -ItemType Directory -Force $data | Out-Null
 Set-Content (Join-Path $data 'settings.json') '{}'
@@ -69,13 +148,18 @@ New-Item -Path $named -Force | Out-Null
 
 # The uninstaller runs a copy of itself and returns at once: what it took is waited for.
 $uninstaller = Join-Path $installed 'unins000.exe'
-Start-Process -FilePath $uninstaller -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+$unlog = Join-Path $env:RUNNER_TEMP 'uninstall.log'
+Start-Process -FilePath $uninstaller -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$unlog"
 $waited = 0
 while ((Test-Path $installed) -and $waited -lt 60) {
     Start-Sleep -Seconds 1
     $waited++
 }
-if (Test-Path $installed) { throw "The uninstaller left $installed" }
+if (Test-Path $installed) {
+    Get-ChildItem $installed -Recurse -Force | ForEach-Object { "  left: $($_.FullName)" }
+    Get-Content $unlog -Tail 30 -ErrorAction SilentlyContinue | ForEach-Object { "  $_" }
+    throw "The uninstaller left $installed"
+}
 if (Test-Path $entry) { throw "The uninstaller left the Start menu entry" }
 if ((Get-ItemProperty -Path $run -ErrorAction SilentlyContinue).'CabinetOS 2P Start') { throw "The uninstaller left Startup's entry" }
 if (Test-Path $named) { throw "The uninstaller left the name for notifications" }

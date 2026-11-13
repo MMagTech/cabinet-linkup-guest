@@ -1,8 +1,10 @@
 2P Start @VERSION@: player two, from anywhere. It joins a LinkUp game a CabinetOS console hosts.
 
+**New:** your code is yours. Pair with it again on another computer, or after removing 2P Start, and your friends are there. And a server keeps two people on 2P Start from being made friends, since neither can host. Both need a LinkUp server newer than 0.1.2.
+
 2P Start is not signed by Apple or Microsoft, so the first time it opens, the computer warns about it. That is expected.
 
-**Mac** (Apple silicon, macOS 13 or later): open `2P-Start-@VERSION@-Mac.dmg` and drag 2P Start onto Applications, then open it. The Mac says it can't check it: press Done, open System Settings, Privacy & Security, press Open Anyway beside 2P Start, and give your password. When it asks to send notifications, press Allow.
+**Mac** (Apple silicon, macOS 13 or later): open `2P-Start-@VERSION@-Mac.dmg` and drag 2P Start onto Applications, then open it. The Mac says it can't check it: press Done, open System Settings, Privacy & Security, press Open Anyway beside 2P Start, and give your password. When it asks to send notifications, press Allow. To update, quit 2P Start from its menu bar icon first.
 
 **Windows** (10 or 11, 64-bit): open `2P-Start-@VERSION@-Windows-Setup.exe`. Windows says "Windows protected your PC": press More info, then Run anyway, and then Install. It needs no administrator password, and it puts 2P Start in the Start menu.
 

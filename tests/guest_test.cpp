@@ -91,11 +91,23 @@ void theKeyStoreHolds(const std::string& root) {
 
 void theAccountStays(const std::string& root) {
     const std::string folder = root + "/account-a";
-    const std::string first = guest::accountId(folder);
+    check(guest::accountId(folder).empty(), "an account id was there before pairing");
+    const std::string first = guest::accountFor(folder, "K7MR-4QXT-9HPV");
     check(first.size() == 32, "an account id is not 32 characters");
     check(first.find_first_not_of("0123456789abcdef") == std::string::npos, "an account id is not hex");
-    check(guest::accountId(folder) == first, "the account id changed between two asks");
-    check(guest::accountId(root + "/account-b") != first, "two folders made the same account id");
+    check(guest::accountId(folder).empty(), "an account id was kept before pairing worked");
+    check(guest::accountFor(root + "/account-b", "k7mr 4qxt 9hpv") == first,
+          "the same code, typed another way on another computer, gave another id");
+    check(guest::accountFor(folder, "K7MR-4QXT-9HPW") != first, "two codes gave the same id");
+    check(guest::accountFor(folder, "K7MR-4QXT").empty(), "a code too short gave an id");
+
+    check(guest::keepAccount(folder, first) && guest::accountId(folder) == first, "the id was not kept");
+    check(guest::accountFor(folder, "AAAA-BBBB-CCCC") == first, "a changed code changed the kept id");
+    check(guest::keepAccount(folder, guest::accountFor(root + "/account-c", "AAAA-BBBB-CCCC")) &&
+              guest::accountId(folder) == first,
+          "pairing again replaced the kept id");
+    check(!guest::keepAccount(root + "/account-d", "not an id") && guest::accountId(root + "/account-d").empty(),
+          "something not an id was kept");
 
     check(guest::username(folder).empty(), "a name was there before one was given");
     check(guest::keepUsername(folder, "alex") && guest::username(folder) == "alex", "a name was not kept");
