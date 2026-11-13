@@ -1,6 +1,6 @@
 // 2pstart: CabinetOS 2P Start, the app. A window holding the console's 1920 by 1080 canvas, fitted
 // to whatever size it is, and the loop that runs it. What is on screen and what each press does is
-// app.cpp's.
+// App's (app.h).
 //
 //   2pstart                     the app, keeping what it holds in the person's own folder (paths.h)
 //   2pstart --folder <path>     the same, kept in that folder instead: for trying it as a second friend

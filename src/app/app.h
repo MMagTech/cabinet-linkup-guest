@@ -2,7 +2,10 @@
 // console's LinkUp screens (linkup.cpp, linkupflow.cpp and linkupsession.cpp in CabinetOS): first
 // run in place of the console's Add a server, the list of friends, Settings, the panels over them,
 // and a game. The server is guest::Link's, the game's connection is game::Game's, and the drawing is
-// the screens'; this joins them. The game's part is session.cpp.
+// the screens'; this joins them. Its parts are in files named for their jobs: app.cpp, its start, the
+// server, a frame, the hands and what happens; moving.cpp, moving around the screens; mouse.cpp;
+// typing.cpp; session.cpp, a game; updatecheck.cpp, Check for updates; controllers.cpp; and
+// fortray.cpp, what the tray asks of it. What they share is shared.h.
 //
 // Everything here runs on the window's thread. Nothing in it waits on the network.
 

@@ -19,7 +19,7 @@ renamed part, or a change to who calls whom.
 | `src/ui/` | What every screen is drawn with: rounded shapes and words on the console's 1920 by 1080 canvas (`draw`), the console's sixteen colours (`look`), the parts screens share (`parts`), and the bars and glow around a host's game (`glow`). The numbers are the console's |
 | `src/screens/` | Each screen, given what to show. None knows a server, a stream or a controller |
 | `src/gallery/` | `2pstart-gallery`: every screen with made-up friends, in a window or as pictures |
-| `src/app/` | `2pstart`, the app: its window, what each press does, a game in it (`session.cpp`), Check for updates (`updates`), and the three kinds of hands turned into the console's moves |
+| `src/app/` | `2pstart`, the app, and its window's parts, each in a file named for its job: its start, the server, a frame, the hands and what happens (`app.cpp`), moving around the screens (`moving.cpp`), the mouse (`mouse.cpp`), typing (`typing.cpp`), a game in it (`session.cpp`), Check for updates (`updatecheck.cpp`, with `updates` asking GitHub), the controllers (`controllers.cpp`) and what the tray asks of it (`fortray.cpp`), with what they share in `shared.h`. And the three kinds of hands turned into the console's moves |
 | `src/app/` `idle`, `startup`, `tray`, `menu` | Where the app meets the computer, each system's own way: Offline with nobody at it, opening at login, the tray, the menu bar, the Dock and notifications, and a text box's right-click menu |
 | `assets/fonts/` | Noto Sans, the console's font, with its licence |
 | `src/cli/` | `2pstart-cli`, the app's server side on the command line |
@@ -46,8 +46,9 @@ call from a part into one it must not know does not link.
 ## Where new code goes
 
 - **A new job gets a file of its own**, named for the job, never a few hundred lines added to a file
-  that does something else. The App's methods may live in a file named for their job, as a game's do
-  in `session.cpp`: `app.cpp` need not hold all of them.
+  that does something else. The App's methods live in files named for their jobs, as a game's do in
+  `session.cpp` and typing's in `typing.cpp`: a new job of the window's gets a file of its own beside
+  them.
 - **Search first.** The console's code, built from `cabinetos/`, may already do it.
 - **A new folder, program or library** is asked about first, on an issue.
 

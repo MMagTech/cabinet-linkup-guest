@@ -13,7 +13,7 @@
 // Windows, for H.265 where the chip has it and H.264 otherwise, as the host is told in the hello
 // (link.cpp); and the picture is kept in memory, the newest only, for the window to draw (Pictures).
 // The colours are BT.601 limited range, as the console states after its decoder; the window's
-// texture says so (app.cpp).
+// texture says so (session.cpp).
 
 #pragma once
 
