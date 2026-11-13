@@ -79,8 +79,9 @@ xattr -dr com.apple.quarantine "/Applications/2P Start.app"
 ```
 
 When it asks to send notifications, press Allow: that is how an invite reaches
-you with the window closed. After an update, do steps 3 and 4 again, or the
-line again.
+you with the window closed. To update, quit 2P Start from its menu bar icon
+first, or the Mac opens the one still running; then do steps 1 to 4 again, or
+the line again.
 
 ### On Windows
 
