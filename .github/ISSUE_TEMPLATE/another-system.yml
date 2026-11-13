@@ -1,0 +1,39 @@
+name: A 2P Start for another system
+description: Linux, Android, iOS, a handheld, or a guest inside another frontend.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Read CONTRIBUTING.md, "The rules", and docs/ARCHITECTURE.md, "Each system's own",
+        first. Whatever you make only joins a game, never hosts one, and sends `"hosts": false` to the
+        server. It is yours to name, but not "CabinetOS 2P Start": say it works with CabinetOS LinkUp.
+  - type: input
+    id: where
+    attributes:
+      label: Which system or frontend
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How it is built
+      options:
+        - On this repository's code, as a new system here
+        - On this repository's code, in a repository of my own
+        - Written anew, from the protocol
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: What you would do
+      description: What it needs that is not here yet, and anything you would change in this repository.
+    validations:
+      required: true
+  - type: checkboxes
+    id: joins
+    attributes:
+      label: It only joins
+      options:
+        - label: It never hosts a game, and sends "hosts" false when it pairs and signs in.
+          required: true

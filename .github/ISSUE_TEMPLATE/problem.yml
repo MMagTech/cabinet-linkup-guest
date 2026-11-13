@@ -1,0 +1,42 @@
+name: Something is wrong
+description: 2P Start does something it should not, or does not do what it should.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem goes privately instead: see SECURITY.md. Leave out addresses, codes and
+        the names of anybody's computers.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings, About.
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options:
+        - Mac
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: What --check-game says
+      description: |
+        For a game that will not play: what this computer lacks, a line each, or nothing when it
+        lacks nothing. On a Mac, in Terminal:
+        "/Applications/2P Start.app/Contents/MacOS/2P Start" --check-game
+        On Windows, in PowerShell:
+        & "$env:LOCALAPPDATA\Programs\2P Start\2P Start.exe" --check-game | Out-String
+      render: text

@@ -1,10 +1,52 @@
 # Working on 2P Start
 
-This is for people who want to build 2P Start, try it, or change one thing.
-[CLAUDE.md](CLAUDE.md) has the map of the code and the rules for every change;
-read it first. The short of the rules: show the plan before a change, nothing
-in `cabinetos/` is edited here, and nothing private goes in a tracked file,
-since the repository is public.
+This is for people who want to build 2P Start, try it, or change one thing,
+and for anyone making a 2P Start of their own for another system or frontend.
+Read [The rules](#the-rules) below, then
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for where each job lives, and
+[docs/decisions/](docs/decisions/README.md) for what was decided and why. AI
+tools start at [AGENTS.md](AGENTS.md).
+
+## The rules
+
+- **It only joins.** 2P Start never hosts, and never grows into a second way
+  to run CabinetOS ([guest-only](docs/decisions/2026-11-10-guest-only.md)).
+  The host's console stays in charge. Anything of yours that joins a LinkUp
+  server sends `"hosts": false`
+  ([says-it-only-joins](docs/decisions/2026-11-12-says-it-only-joins.md)).
+- **One copy of the protocol.** Nothing in `cabinetos/` is edited here: a
+  change to the console's code goes to CabinetOS, and the pin moves.
+- **Every screen is the console's.** Its numbers from the console's code, its
+  words from the console's `linkuprules.cpp`
+  ([screens-from-the-console](docs/decisions/2026-11-10-screens-from-the-console.md)).
+- **Search before you write.** The console's code may already do it.
+- **One job, one file.** A new job gets a file of its own, named for the job,
+  never a few hundred lines added to a file that does something else.
+  [ARCHITECTURE.md](docs/ARCHITECTURE.md), "Where new code goes".
+- **Remove what you replace**, in the same change: the old function, its
+  callers, its flag, its comment. No commented-out code.
+- **Docs change with the code.** A change that adds, moves or renames a file
+  updates `docs/ARCHITECTURE.md`. A comment or doc that names a file is put
+  right when the file moves: a stale comment reads exactly like a current one.
+- **A decision between real options** gets a small file in `docs/decisions/`.
+- **Nothing private in a tracked file.** The repository is public: no
+  address, host name, password, key, token or home path of anybody's machine.
+- **Write plainly**, in short words.
+
+## Pull requests and issues
+
+- **Ask first for anything new.** A fix of a few lines that puts back what was
+  meant to work goes straight to a pull request. A feature, a new system, a
+  new file or folder, a change to the build or CI, or a refactor across files
+  needs an issue MMagTech has agreed to first, linked from the pull request.
+- **A 2P Start for another system or frontend** starts with the "A 2P Start
+  for another system" issue form, whether it would live here or in a
+  repository of your own. Yours is yours to name, but not "CabinetOS 2P
+  Start": say it works with CabinetOS LinkUp.
+- **AI-assisted pull requests are welcome**; 2P Start is built with AI too. A
+  person reads it, sends it and answers for it, and the pull request says
+  which tool helped and what was checked.
+- **Security problems** are reported privately: [SECURITY.md](SECURITY.md).
 
 ## Where it stands
 
@@ -64,6 +106,17 @@ Every pull request and every push to `main`, on macOS and on Windows: the build 
 warnings, the tests, the screens as pictures, and each package tried on its own with no GStreamer of
 the computer's own (`ci/check-app.sh` for the Mac app, `ci/check-setup.ps1` for the Setup, which it
 also uninstalls). And a read of every tracked file for anything private (`ci/check-no-private.sh`).
+
+Two more hold the structure, as CabinetOS learned to
+([checks-hold-the-structure](docs/decisions/2026-11-12-checks-hold-the-structure.md)):
+`ci/check-long-files.sh` lists every source file over 1,500 lines, and never fails; and
+`ci/check-named-files.py` reads every doc and comment for a file of ours, or of the console's at its
+pin, that is not there. It warns until the date set in the workflow, then fails. Run both by hand
+before a pull request:
+
+```bash
+ci/check-long-files.sh && python3 ci/check-named-files.py
+```
 
 ## Releases
 
