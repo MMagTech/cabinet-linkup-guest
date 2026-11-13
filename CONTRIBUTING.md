@@ -36,14 +36,15 @@ tools start at [AGENTS.md](AGENTS.md).
 
 ## Pull requests and issues
 
-- **Ask first for anything new.** A fix of a few lines that puts back what was
-  meant to work goes straight to a pull request. A feature, a new system, a
-  new file or folder, a change to the build or CI, or a refactor across files
-  needs an issue MMagTech has agreed to first, linked from the pull request.
-- **A 2P Start for another system or frontend** starts with the "A 2P Start
-  for another system" issue form, whether it would live here or in a
-  repository of your own. Yours is yours to name, but not "CabinetOS 2P
-  Start": say it works with CabinetOS LinkUp.
+- **Ask first for anything new you would send here.** A fix of a few lines
+  that puts back what was meant to work goes straight to a pull request. A
+  feature, a new system, a new file or folder, a change to the build or CI,
+  or a refactor across files needs an issue MMagTech has agreed to first,
+  before the work, linked from the pull request.
+- **A 2P Start for another system or frontend**, in a repository of your
+  own, needs no one's leave. To add one here, open the "A 2P Start for
+  another system" issue form first. Yours is yours to name, but not
+  "CabinetOS 2P Start": say it works with CabinetOS LinkUp.
   [docs/PORTING.md](docs/PORTING.md) says the rest.
 - **AI-assisted pull requests are welcome**; 2P Start is built with AI too. A
   person reads it, sends it and answers for it, and the pull request says

@@ -3,7 +3,8 @@
 For anyone making a 2P Start for another system (Linux, Android, iOS, a handheld) or a guest inside
 another frontend: where to start, what each system fills in, and how a package and its CI job are
 added. Read it with [ARCHITECTURE.md](ARCHITECTURE.md), the map, and
-[CONTRIBUTING.md](../CONTRIBUTING.md), "The rules".
+[CONTRIBUTING.md](../CONTRIBUTING.md), "The rules". An AI tool helping you starts at
+[AGENTS.md](../AGENTS.md), which says the same.
 
 ## The rules first
 
@@ -16,9 +17,14 @@ added. Read it with [ARCHITECTURE.md](ARCHITECTURE.md), the map, and
   a repository of your own, give it its own name and id where the code sets them, so it never shares
   a folder or a Login Item with 2P Start on the same computer: search for `CabinetOS 2P Start` and
   `io.github.mmagtech.2pstart`.
-- **It starts with an issue**: the "A 2P Start for another system" form, whether it would live here
-  or in a repository of your own. A new system here waits for MMagTech's yes on it, as anything new
-  does.
+- **A copy of your own needs no one's leave.** 2P Start is open source: download it and make it
+  yours, under the two rules above. Telling us about it with the issue form is welcome, never needed.
+- **A new system to be added here is asked about first**, before the work: open
+  [the issue form](https://github.com/MMagTech/cabinet-linkup-guest/issues/new?template=another-system.yml),
+  "A 2P Start for another system", and say which system and how. Some choices are settled there,
+  such as where its GStreamer comes from, and MMagTech says yes or no before weeks go into it
+  ([ask-first-only-to-add-here](decisions/2026-11-13-ask-first-only-to-add-here.md)). A small fix
+  needs no issue: send the pull request.
 - **Nothing in `cabinetos/` is edited.** It is the console's code at a pinned commit, the one copy of
   the protocol. A change to it goes to CabinetOS, and the pin moves.
 - **Every screen is the console's**, its numbers from the console's code and its words from
@@ -166,6 +172,7 @@ down:
 
 ## Before a pull request
 
+- For a new system, the issue it was agreed on, named in the pull request.
 - The build and `ctest`, on the new system.
 - `2pstart-gallery --shots <folder>`, and a look at the pictures.
 - `2pstart --check-game`, with the game.

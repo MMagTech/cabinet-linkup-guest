@@ -5,8 +5,10 @@ body:
     attributes:
       value: |
         Thank you. Read docs/PORTING.md first: the rules, where to start, and what each system fills
-        in. Whatever you make only joins a game, never hosts one, and sends `"hosts": false` to the
-        server. It is yours to name, but not "CabinetOS 2P Start": say it works with CabinetOS LinkUp.
+        in. To add a system here, fill this in before the work. For a copy of your own, it is
+        welcome, never needed. Whatever you make only joins a game, never hosts one, and sends
+        `"hosts": false` to the server. It is yours to name, but not "CabinetOS 2P Start": say it
+        works with CabinetOS LinkUp.
   - type: input
     id: where
     attributes:
