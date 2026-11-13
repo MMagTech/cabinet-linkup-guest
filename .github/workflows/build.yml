@@ -2,7 +2,8 @@ name: Build
 
 # Every pull request and every push to main: the build and its tests on macOS and on Windows, the two
 # packages friends download (the Mac app in a DMG, the Windows Setup), each tried on its own, and a
-# read of every tracked file for anything private.
+# read of every tracked file for anything private. And the build with no game and its tests on Linux,
+# which is not shipped, for those who port it.
 #
 # A tag v<version> does the same, and then makes a draft release on GitHub with both packages, which
 # MMagTech publishes. Neither package is signed for other computers, and nothing here uses a secret.
@@ -282,6 +283,36 @@ jobs:
           name: 2pstart-windows
           path: dist/2P Start Setup.exe
           if-no-files-found: error
+
+  # Linux, which is not shipped: the build with no game, and its tests, so the stand-ins another
+  # system starts from (docs/ARCHITECTURE.md, "Each system's own") keep building. On Ubuntu's own
+  # packages, as a person porting it would build: 26.04's OpenSSL is 3.2 or later, which Argon2id needs.
+  linux:
+    name: Linux (built, not shipped)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
+      - name: Ubuntu's packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build libssl-dev libcurl4-openssl-dev \
+            libjson-c-dev libsdl3-dev libsdl3-ttf-dev
+      - name: Build
+        run: |
+          cmake --preset default -DTWOPSTART_GAME=OFF
+          cmake --build --preset default
+      - name: Test
+        run: ctest --preset default
+      - name: The screens, as pictures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: screens-linux
+          path: build/shots
+          if-no-files-found: ignore
 
   # A tag v<version>: a draft release with both packages, named for the version, which MMagTech
   # publishes once he has tried them. The tag must be the version the build says it is.

@@ -107,6 +107,11 @@ warnings, the tests, the screens as pictures, and each package tried on its own 
 the computer's own (`ci/check-app.sh` for the Mac app, `ci/check-setup.ps1` for the Setup, which it
 also uninstalls). And a read of every tracked file for anything private (`ci/check-no-private.sh`).
 
+On Linux, which is not shipped: the build with no game (`-DTWOPSTART_GAME=OFF`), the tests and the
+screens, on Ubuntu 26.04's own packages, which the workflow's Linux job names. It keeps the stand-ins
+another system starts from building ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), "Each system's
+own").
+
 Two more hold the structure, as CabinetOS learned to
 ([checks-hold-the-structure](docs/decisions/2026-11-12-checks-hold-the-structure.md)):
 `ci/check-long-files.sh` lists every source file over 1,500 lines, and never fails; and

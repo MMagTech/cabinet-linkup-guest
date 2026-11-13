@@ -43,15 +43,18 @@ constexpr int64_t kConnectLimitMs = 30000;
 //
 //   Windows   lib\gstreamer-1.0 beside the program
 //   Mac       Contents/Library/gstreamer-1.0 in the app, beside Resources, which is SDL's base there
+//   Others    none yet: a package for another system names its place here
 void useGStreamerBeside() {
     const char* base = SDL_GetBasePath();
     if (!base) return;
-#ifdef _WIN32
+#if defined(_WIN32)
     const std::string plugins = std::string(base) + "lib\\gstreamer-1.0";
-#else
+#elif defined(__APPLE__)
     const std::string plugins = std::string(base) + "../Library/gstreamer-1.0";
+#else
+    const std::string plugins;
 #endif
-    if (!g_file_test(plugins.c_str(), G_FILE_TEST_IS_DIR)) return;
+    if (plugins.empty() || !g_file_test(plugins.c_str(), G_FILE_TEST_IS_DIR)) return;
     g_setenv("GST_PLUGIN_SYSTEM_PATH_1_0", plugins.c_str(), TRUE);
     g_unsetenv("GST_PLUGIN_PATH_1_0");
     g_unsetenv("GST_PLUGIN_PATH");
