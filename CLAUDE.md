@@ -14,6 +14,8 @@ and a server say to each other is `PROTOCOL.md` in MMagTech/cabinet-linkup.
    system's own places. It is loaded below.
 3. [docs/decisions/](docs/decisions/README.md): what was decided and why. Look there before proposing
    a change.
+4. [docs/NEXT-SESSION.md](docs/NEXT-SESSION.md): what is being worked on now, and what waits.
+   Rewrite it at the end of each piece of work, in that work's own branch.
 
 Build and test: `cmake --preset default && cmake --build --preset default && ctest --preset default`.
 
