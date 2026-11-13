@@ -26,7 +26,7 @@ renamed part, or a change to who calls whom.
 | `src/win/` | What Windows lacks for the console's code to build as written: `fileio.h` the Windows way, a few POSIX names, and in `posix/` the POSIX headers `rtc.cpp` names |
 | `tests/` | `guest-test` and `app-test`, with no network and no window |
 | `ci/` | What the workflow runs: each package tried on its own, the DMG, the Windows Setup with its uninstaller, the release's words, and the checks every pull request runs (`check-no-private.sh`, `check-long-files.sh`, `check-named-files.py`) |
-| `docs/` | This map, the [decisions](decisions/README.md), and the README's pictures (`media/`) |
+| `docs/` | This map, the [decisions](decisions/README.md), what the next session picks up ([NEXT-SESSION.md](NEXT-SESSION.md)), and the README's pictures (`media/`) |
 | `.github/` | The workflow (`build.yml`), the issue forms and the pull request template |
 
 ## What each part must never do

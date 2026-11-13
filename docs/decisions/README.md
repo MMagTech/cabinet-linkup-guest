@@ -33,7 +33,7 @@ One line per file, in the form `- [name](file.md): the decision in a few words.`
 
 - [guest-only](2026-11-10-guest-only.md): 2P Start joins a game and never hosts; the host's console stays in charge.
 - [says-it-only-joins](2026-11-12-says-it-only-joins.md): 2P Start tells a server it only joins, with `"hosts": false`, so it is never offered to another as a friend.
-- [one-server-at-a-time](2026-11-10-one-server-at-a-time.md): one LinkUp server at a time in the first version; several later.
+- [one-server-at-a-time](2026-11-10-one-server-at-a-time.md): one LinkUp server at a time, as a console has; several at once dropped, since linked servers cover it.
 - [variations-by-a-written-contract](2026-11-12-variations-by-a-written-contract.md): other systems and frontends are helped by written docs and tests, not by a plugin system.
 
 ### Screens
