@@ -21,7 +21,10 @@ The latest merges, newest first:
   Linux build to start from, what each system's own place must do, the game, and how a package and
   its CI job are added. The README, `CONTRIBUTING.md`, `AGENTS.md`, the map and the issue form link to
   it ([porting-guide-a-page-of-its-own](decisions/2026-11-13-porting-guide-a-page-of-its-own.md)).
-  When a place or a package changes, the guide changes with it.
+  A copy of one's own needs no one's leave; a new system to be added here is asked about first, on
+  an issue, and `AGENTS.md` tells an AI tool to say so at the start
+  ([ask-first-only-to-add-here](decisions/2026-11-13-ask-first-only-to-add-here.md)). When a place or
+  a package changes, the guide changes with it.
 - #19, "The window's code is split into files named for their jobs", for #18, "Split app.cpp into
   files named for their jobs". `src/app/app.cpp` keeps its start, the server, a frame, the hands and
   what happens; the rest of the window is in `moving.cpp`, `mouse.cpp`, `typing.cpp`,
