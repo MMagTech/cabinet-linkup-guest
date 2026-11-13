@@ -7,7 +7,8 @@
 # PipeWire the console's sound queue uses from src/pipewire/.
 
 cmake_minimum_required(VERSION 3.25)
-# The version is the release's: its tag on GitHub is this with a v in front (release.yml checks it).
+# The version is the release's: its tag on GitHub is this with a v in front (build.yml's Draft release
+# job checks it).
 project(cabinet-linkup-guest VERSION 0.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
