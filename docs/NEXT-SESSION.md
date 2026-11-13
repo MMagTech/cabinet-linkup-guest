@@ -11,11 +11,17 @@ Name every issue and pull request by its title as well as its number. Every sess
 ## Where things stand
 
 **2026-11-13.** The newest release is 2P Start 0.1.1, published on 2026-11-13, for a Mac with Apple
-silicon and a Windows PC. No source file is over 1,500 lines. No pull request or issue is open. What
-comes next is below.
+silicon and a Windows PC. No source file is over 1,500 lines. No pull request or issue is open.
+Nothing is agreed next: ask MMagTech.
 
 The latest merges, newest first:
 
+- #21, "A porting guide, for a 2P Start on another system or frontend", for #20 of the same name.
+  `docs/PORTING.md` is for anyone making a 2P Start for another system or frontend: the rules, the
+  Linux build to start from, what each system's own place must do, the game, and how a package and
+  its CI job are added. The README, `CONTRIBUTING.md`, `AGENTS.md`, the map and the issue form link to
+  it ([porting-guide-a-page-of-its-own](decisions/2026-11-13-porting-guide-a-page-of-its-own.md)).
+  When a place or a package changes, the guide changes with it.
 - #19, "The window's code is split into files named for their jobs", for #18, "Split app.cpp into
   files named for their jobs". `src/app/app.cpp` keeps its start, the server, a frame, the hands and
   what happens; the rest of the window is in `moving.cpp`, `mouse.cpp`, `typing.cpp`,
@@ -33,14 +39,7 @@ a game starts", merged on 2026-11-13: the stream between host and friend is writ
 
 ## Next
 
-1. **A porting guide**, for someone building a 2P Start for another system or frontend, now that the
-   files it names stay put. From the Linux build in CI; the places in
-   [ARCHITECTURE.md](ARCHITECTURE.md), "Each system's own", and what each must do; how to add a
-   package and a CI job; and the rules: it only joins and sends `"hosts": false`, and it is not called
-   "CabinetOS 2P Start"
-   ([variations-by-a-written-contract](decisions/2026-11-12-variations-by-a-written-contract.md)).
-   Ask MMagTech where it goes before making a new file under `docs/`. One pull request, which rewrites
-   this file.
+Nothing is agreed. Ask MMagTech what comes next, or wait for a friend's problem or an issue.
 
 ## Dates
 
