@@ -144,6 +144,11 @@ beside it in `assets/fonts`.
 
 ## Working on 2P Start
 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md): where it stands, building it on a Mac
-  and on Windows, the packages, what CI checks, and releases.
-- [`CLAUDE.md`](CLAUDE.md): the map of the code, and the rules for every change.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): the rules, where it stands, building
+  it on a Mac and on Windows, the packages, what CI checks, and releases.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the map of the code, what
+  each part must never do, and each system's own places, for a 2P Start on
+  another system.
+- [`docs/decisions/`](docs/decisions/README.md): what was decided, and why.
+- [`AGENTS.md`](AGENTS.md) for AI tools, and [`CLAUDE.md`](CLAUDE.md) for
+  sessions with the maintainer.
