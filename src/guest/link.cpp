@@ -137,8 +137,13 @@ void Link::pair(const std::string& address, const std::string& code, const std::
     work([this, address, code, username]() {
         Event e;
         e.kind = Event::Kind::Paired;
-        const std::string account = accountId(folder_);
-        if (account.empty() || !usernameFits(username)) {
+        const std::string account = accountFor(folder_, code);
+        if (account.empty()) {
+            e.pairResult = pairing::Result::WrongCode;
+            post(std::move(e));
+            return;
+        }
+        if (!usernameFits(username)) {
             e.pairResult = pairing::Result::Failed;
             post(std::move(e));
             return;
@@ -155,6 +160,7 @@ void Link::pair(const std::string& address, const std::string& code, const std::
         e.pairResult = pairing::pair(keys_, address, code, textOf(j), serverName);
         e.server = serverName;
         if (e.pairResult == pairing::Result::Paired) {
+            keepAccount(folder_, account);
             keepUsername(folder_, username);
             link_.reset();
             paired_ = true;

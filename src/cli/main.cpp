@@ -140,10 +140,10 @@ int pair(Keys& keys, const std::string& folder, const std::string& address, cons
         std::printf("Already paired with %s. Run leave first.\n", server->name.c_str());
         return 1;
     }
-    const std::string account = guest::accountId(folder);
+    const std::string account = guest::accountFor(folder, code);
     if (account.empty()) {
-        std::printf("Could not keep an account id in %s\n", folder.c_str());
-        return 2;
+        std::printf("%s\n", wordsFor(pairing::Result::WrongCode));
+        return 1;
     }
     json_object* j = json_object_new_object();
     jsonutil::set(j, "kind", "console");
@@ -160,7 +160,10 @@ int pair(Keys& keys, const std::string& folder, const std::string& address, cons
         std::printf("%s\n", wordsFor(result));
         return 1;
     }
-    guest::keepUsername(folder, name);
+    if (!guest::keepAccount(folder, account) || !guest::keepUsername(folder, name)) {
+        std::printf("Paired with %s, but could not keep it in %s\n", serverName.c_str(), folder.c_str());
+        return 2;
+    }
     std::printf("Paired with %s as %s.\n", serverName.c_str(), name.c_str());
     return 0;
 }

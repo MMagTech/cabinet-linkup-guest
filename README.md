@@ -105,7 +105,9 @@ the old one, and keeps your pairing.
 ### The first time it opens
 
 It asks for your friend's LinkUp server, the code, and a name. Then your
-friend's console lists you, and you see your friends. Closing the window
+friend's console lists you, and you see your friends. Keep the code: it is
+yours now. On another computer, or after removing 2P Start, pair with it again
+and your friends are there. Closing the window
 leaves 2P Start running, in the tray or the menu bar, so invites still reach
 you; Settings, System, Keep running changes that.
 
