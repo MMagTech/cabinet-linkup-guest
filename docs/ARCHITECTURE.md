@@ -63,6 +63,6 @@ new system can run before it has all of them.
 | `src/app/startup.cpp` | A Login Item; the Run key | Startup says it cannot |
 | `src/app/tray_mac.mm`, `tray_win.cpp` (`tray_system.h`) | The menu bar and the Dock; the tray, with notifications | `tray_none.cpp`: the close button quits, no notifications |
 | `src/app/menu_mac.mm`, `menu_win.cpp` | The system's own right-click menu for a text box | `menu_none.cpp`: none |
-| `src/game/stream.cpp` | The graphics chip's decoder: `vtdec`, `d3d11h264dec` | None yet: a new system names its own |
-| `src/game/game.cpp` | Where the package keeps GStreamer's plugins | None yet |
+| `src/game/stream.cpp` | The graphics chip's decoder: `vtdec`, `d3d11h264dec` | None: `lacking()` says so, and no game is offered. A new system names its own |
+| `src/game/game.cpp` | Where the package keeps GStreamer's plugins | None: GStreamer is the one installed |
 | `CMakeLists.txt`, `cmake/`, `ci/` | How each package is made and tried | None: a new system adds its own, and a job in `.github/workflows/build.yml` |

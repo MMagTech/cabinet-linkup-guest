@@ -27,12 +27,18 @@ bool hasElement(const char* name) {
 // The computer's own decoder, its graphics chip's: VideoToolbox on a Mac, Direct3D 11 on Windows,
 // which nearly every Mac and PC has for H.264, and most from about 2016 on for H.265. There is no
 // other: one in software would bring ffmpeg into the app.
-#ifdef _WIN32
+//
+// Another system names its own chip's decoder here. Until it does, GStreamer has no part of this
+// name, so lacking() lists it and no game is offered, as none.cpp does.
+#if defined(_WIN32)
 constexpr const char* kDecoder = "d3d11h264dec";
 constexpr const char* kDecoderH265 = "d3d11h265dec";   // there only when the chip decodes H.265
-#else
+#elif defined(__APPLE__)
 constexpr const char* kDecoder = "vtdec";
 constexpr const char* kDecoderH265 = "vtdec";
+#else
+constexpr const char* kDecoder = "a decoder for this system, which stream.cpp does not name yet";
+constexpr const char* kDecoderH265 = kDecoder;
 #endif
 
 std::string decoderFor(bool h265) {
