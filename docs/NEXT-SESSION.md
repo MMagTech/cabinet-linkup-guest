@@ -30,8 +30,6 @@ The latest merges, newest first:
 
 Kept so it is not lost, and worked on only when MMagTech raises it.
 
-- **Several LinkUp servers at once**
-  ([one-server-at-a-time](decisions/2026-11-10-one-server-at-a-time.md)).
 - **A link in the invite message** that opens 2P Start with the server and the code filled in.
 - **A newer copy takes over from an older one still running**, so a Mac friend need not quit 2P Start
   from its menu bar before updating, as the README asks today. Only if friends hit it.
