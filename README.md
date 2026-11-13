@@ -149,6 +149,9 @@ beside it in `assets/fonts`.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the map of the code, what
   each part must never do, and each system's own places, for a 2P Start on
   another system.
+- [`docs/PORTING.md`](docs/PORTING.md): making a 2P Start for another system
+  or frontend: the rules, where to start, what each system fills in, and how
+  a package and its CI job are added.
 - [`docs/decisions/`](docs/decisions/README.md): what was decided, and why.
 - [`AGENTS.md`](AGENTS.md) for AI tools, and [`CLAUDE.md`](CLAUDE.md) for
   sessions with the maintainer.

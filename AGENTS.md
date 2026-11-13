@@ -7,6 +7,8 @@ joins, and never hosts. A person reviews every pull request. Read these before c
 2. `docs/ARCHITECTURE.md`: where each job lives, what each part must never do, and each system's own
    places.
 3. `docs/decisions/README.md`: what was decided and why. Look there before proposing a change.
+4. `docs/PORTING.md`, for a 2P Start on another system or frontend: the rules, where to start, and
+   what each system fills in.
 
 ## Before you write code
 

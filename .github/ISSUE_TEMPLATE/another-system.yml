@@ -4,8 +4,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you. Read CONTRIBUTING.md, "The rules", and docs/ARCHITECTURE.md, "Each system's own",
-        first. Whatever you make only joins a game, never hosts one, and sends `"hosts": false` to the
+        Thank you. Read docs/PORTING.md first: the rules, where to start, and what each system fills
+        in. Whatever you make only joins a game, never hosts one, and sends `"hosts": false` to the
         server. It is yours to name, but not "CabinetOS 2P Start": say it works with CabinetOS LinkUp.
   - type: input
     id: where
