@@ -126,6 +126,14 @@ before a pull request:
 ci/check-long-files.sh && python3 ci/check-named-files.py
 ```
 
+Once a week, `ci/check-gstreamer.py` asks GStreamer's own site whether a newer GStreamer is out in
+the series 2P Start is built with, for both the Mac and Windows, since GStreamer's fixes come out
+that way. If one is, it fails, naming it, and the weekly run opens an issue for it, once. It also
+runs on a pull request that changes the version, and by hand: `python3 -I ci/check-gstreamer.py`.
+Dependabot opens one pull request a month when GitHub's actions have newer versions. vcpkg's
+libraries come from the runner's own vcpkg, and each build's log names their versions
+([hears-of-fixes](docs/decisions/2026-11-13-hears-of-fixes.md)).
+
 ## Releases
 
 The version is the one in `CMakeLists.txt`. A tag `v<version>` on `main` makes a draft release with

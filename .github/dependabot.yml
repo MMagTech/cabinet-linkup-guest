@@ -1,0 +1,13 @@
+# Once a month, one pull request when GitHub's actions in .github/workflows have newer versions.
+# Nothing merges by itself. They run only in CI, never in what friends get. GStreamer, vcpkg's
+# libraries and the cabinetos pin are not watched here: docs/decisions/2026-11-13-hears-of-fixes.md
+# says what watches each.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

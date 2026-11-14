@@ -25,9 +25,9 @@ renamed part, or a change to who calls whom.
 | `src/cli/` | `2pstart-cli`, the app's server side on the command line |
 | `src/win/` | What Windows lacks for the console's code to build as written: `fileio.h` the Windows way, a few POSIX names, and in `posix/` the POSIX headers `rtc.cpp` names |
 | `tests/` | `guest-test` and `app-test`, with no network and no window |
-| `ci/` | What the workflow runs: each package tried on its own, the DMG, the Windows Setup with its uninstaller, the release's words, and the checks every pull request runs (`check-no-private.sh`, `check-long-files.sh`, `check-named-files.py`) |
+| `ci/` | What the workflows run: each package tried on its own, the DMG, the Windows Setup with its uninstaller, the release's words, the checks every pull request runs (`check-no-private.sh`, `check-long-files.sh`, `check-named-files.py`), and once a week, whether GStreamer has a newer version with fixes (`check-gstreamer.py`) |
 | `docs/` | This map, the [decisions](decisions/README.md), the porting guide for another system or frontend ([PORTING.md](PORTING.md)), what the next session picks up ([NEXT-SESSION.md](NEXT-SESSION.md)), and the README's pictures (`media/`) |
-| `.github/` | The workflow (`build.yml`), the issue forms and the pull request template |
+| `.github/` | The workflows (`build.yml`, and `gstreamer.yml` once a week), Dependabot's settings for GitHub's actions, the issue forms and the pull request template |
 
 ## What each part must never do
 
