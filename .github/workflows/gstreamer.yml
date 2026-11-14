@@ -1,0 +1,67 @@
+name: GStreamer's fixes
+
+# Once a week: is there a newer GStreamer with fixes, in the series 2P Start is built with, for both
+# the Mac and Windows (ci/check-gstreamer.py)? And on a pull request that changes the version, and by
+# hand. When the weekly run finds one, it opens an issue, once, so it is not missed
+# (docs/decisions/2026-11-13-hears-of-fixes.md).
+#
+# GitHub turns a schedule off after 60 days with no activity in a public repository; Enable, on this
+# workflow's page under Actions, turns it back on.
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'  # Mondays, 07:23 UTC
+  pull_request:
+    paths:
+      - .github/workflows/build.yml
+      - .github/workflows/gstreamer.yml
+      - ci/check-gstreamer.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  newest:
+    name: No newer GStreamer with fixes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The newest GStreamer in its series
+        id: check
+        run: |
+          set +e
+          python3 -I ci/check-gstreamer.py > "$RUNNER_TEMP/said.txt" 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/said.txt"
+
+      # Only on the weekly run or by hand, and only when a fix is out: not when the site could not be
+      # read. An issue already open with this title is left as it is.
+      - name: An issue, once
+        if: steps.check.outputs.status == '1' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="A newer GStreamer is out, with fixes"
+          if gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title' \
+              | grep -qxF "$title"; then
+            echo "Its issue is open already."
+            exit 0
+          fi
+          { cat "$RUNNER_TEMP/said.txt"; echo; echo "Found by $RUN"; } > "$RUNNER_TEMP/issue.md"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/issue.md"
+
+      - name: The answer
+        env:
+          STATUS: ${{ steps.check.outputs.status }}
+        run: |
+          cat "$RUNNER_TEMP/said.txt"
+          exit "$STATUS"

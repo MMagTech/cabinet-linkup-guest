@@ -71,7 +71,8 @@ jobs:
     timeout-minutes: 60
     env:
       # GStreamer's own runtime and development packages, from its own site and held to these
-      # checksums: the same version as Windows, for the game.
+      # checksums: the same version as Windows, for the game. ci/check-gstreamer.py says, once a
+      # week, when a newer one with fixes is out.
       GST_VERSION: 1.28.8
       GST_RUNTIME_SHA256: d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe
       GST_DEVEL_SHA256: e6d380bc17be7eccf13e0154567d4718fc9321da822408c7ca0cd808b3d4a3f7

@@ -12,10 +12,15 @@ Name every issue and pull request by its title as well as its number. Every sess
 
 **2026-11-13.** The newest release is 2P Start 0.1.1, published on 2026-11-13, for a Mac with Apple
 silicon and a Windows PC. No source file is over 1,500 lines. No pull request or issue is open.
-Nothing is agreed next: ask MMagTech.
 
 The latest merges, newest first:
 
+- #23, "A weekly check for GStreamer's fixes, and Dependabot for the actions", for #22 of the same
+  name. `ci/check-gstreamer.py`, run each Monday by `.github/workflows/gstreamer.yml`, fails when a
+  newer GStreamer in the series 2P Start is built with is out for both the Mac and Windows, and
+  opens an issue, "A newer GStreamer is out, with fixes", once. Dependabot opens one pull request a
+  month for GitHub's actions. vcpkg's libraries and the `cabinetos` pin are left as they are
+  ([hears-of-fixes](decisions/2026-11-13-hears-of-fixes.md)).
 - #21, "A porting guide, for a 2P Start on another system or frontend", for #20 of the same name.
   `docs/PORTING.md` is for anyone making a 2P Start for another system or frontend: the rules, the
   Linux build to start from, what each system's own place must do, the game, and how a package and
@@ -42,7 +47,12 @@ a game starts", merged on 2026-11-13: the stream between host and friend is writ
 
 ## Next
 
-Nothing is agreed. Ask MMagTech what comes next, or wait for a friend's problem or an issue.
+- **GStreamer 1.28.9**, out on 2026-11-06 with what GStreamer calls important security fixes, some
+  in RTP, which carries the video, is out for the Mac and not yet for Windows. Once Windows has it, the weekly
+  check opens its issue. Then: move `GST_VERSION` and its checksums in
+  `.github/workflows/build.yml`, and the version in `CONTRIBUTING.md`, in a pull request of its
+  own, and make a release.
+- Nothing else is agreed. Ask MMagTech what comes next, or wait for a friend's problem or an issue.
 
 ## Dates
 
